@@ -1,1 +1,178 @@
-# ChurchAttendanceTracker
+# ⛪ Church Attendance Tracker
+
+A full-stack attendance system for churches. The **main admin** manages members,
+services, users, reports and settings; **ushers** get a focused screen to record
+Present / Absent / Excused during a live service in just a few taps.
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 18 · React Router 6 · Vite · hand-rolled CSS design system |
+| Backend | Node.js · Express 4 · REST API |
+| Database | PostgreSQL (parameterised queries, SQL migrations, seed script) |
+| Auth | bcryptjs password hashing · JWT access token (15 min) + rotating refresh token (7 days) in HttpOnly cookies |
+| Tests | Jest + Supertest (auth, RBAC, members, services, attendance, users) |
+
+---
+
+## Quick start
+
+### 0. Prerequisites
+
+- Node.js 18+
+- **PostgreSQL 13+** running locally (create nothing manually — the scripts do it)
+- If PostgreSQL is missing:
+  - Windows: install from <https://www.postgresql.org/download/windows/>
+  - or `docker run --name cat-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:16`
+
+### 1. Install
+
+```bash
+npm run install:all        # installs server/, client/ and the root runner
+```
+
+### 2. Configure environment
+
+```bash
+cp server/.env.example server/.env
+```
+
+Defaults expect `postgres/postgres@localhost:5432`. Adjust `DATABASE_URL`,
+`DATABASE_URL_TEST` and the JWT secrets if needed.
+
+### 3. Migrate + seed
+
+```bash
+npm run migrate            # creates tables (tracked in _migrations)
+npm run seed               # demo admin, ushers, 28 members, 10 weekly services,
+                           # deterministic attendance, follow-ups, settings
+```
+
+### 4. Run
+
+```bash
+npm run dev                # API on http://localhost:4000 + web on http://localhost:5173
+```
+
+The Vite dev server proxies `/api` to the backend, so cookies just work.
+For production: `npm run build` then `npm start` — Express serves `client/dist`.
+
+### Default demo accounts (created by seed)
+
+| Role | Email | Password |
+|---|---|---|
+| Main Admin | `admin@copagonaahanta.app` | `Admin@12345` |
+| Usher | `usher@copagonaahanta.app` | `Usher@12345` |
+| Usher | `daniel.usher@copagonaahanta.app` | same as above |
+
+> There is deliberately **no public sign-up** anywhere — only admins create accounts.
+
+### Tests
+
+```bash
+npm test                   # auto-creates church_attendance_test DB, migrates, runs Jest
+```
+---
+
+## Features
+
+### Admin
+- **Overview dashboard** – latest service numbers, 4-service average, active members,
+  open follow-ups, 12-service trend chart, recent services, latest records,
+  high-priority follow-up list.
+- **Attendance screen** – service selector, search, group & status filters,
+  Present/Absent/Excused controls, notes, save button, marked counter,
+  last-updated time, and **who recorded each entry**.
+- **Members** – full CRUD, activate/deactivate, per-member history page with
+  totals, consecutive-absence streaks, group & contact info, follow-up plans.
+- **Services** – create/edit, upcoming/past tabs, headcount, per-service roster view.
+- **Reports** – totals, trends, by service/group/usher, repeat absentees,
+  active-vs-inactive, CSV export for attendance and members.
+- **User management** – create usher/admin accounts, one-time temporary passwords,
+  reset passwords, deactivate/reactivate, last login, records created per usher.
+- **Settings** – church name, usher correction toggle + window, contact visibility,
+  groups and locations CRUD.
+
+### Usher (restricted by the server, not just hidden in the UI)
+- Sign in with admin-issued credentials.
+- Pick today's service → search/filter members → tap **P / A / E** → optional note
+  → **Save attendance**. Nothing else is reachable: no members CRUD, no reports,
+  no settings, no other users. Contact details are hidden unless the admin allows them.
+
+## Security model
+
+- Passwords hashed with bcrypt (cost 10; 4 in tests). Plaintext is never stored or returned.
+- Login rate-limited (10 attempts / 15 min / IP+email) with account-enumeration-safe errors.
+- Access JWT (15 min) + refresh JWT (7 days) in **HttpOnly, SameSite=Lax** cookies;
+  refresh tokens are rotated and stored as SHA-256 hashes so they can be revoked.
+- Logout, deactivation and password reset revoke sessions immediately.
+- `authenticate` middleware re-loads the user on every request (deactivated = cut off).
+- `requireAdmin` guards every admin-only route server-side; ushers receive `403`.
+- All SQL uses parameterised queries; unique constraint prevents duplicate
+  member/service attendance even under concurrent writes (upsert semantics).
+- Audit trail: `recorded_by_user_id`, `updated_by_user_id`, `recorded_at`, `updated_at`
+  on every attendance row; `created_by` on users/services/follow-ups.
+- Ushers may correct **only their own** records, only while the admin-enabled window
+  (default 30 min) is open.
+
+## API overview (`/api`)
+
+| Area | Endpoints | Access |
+|---|---|---|
+| Health | `GET /health` | public |
+| Auth | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/change-password` | public / signed-in |
+| Users | `GET·POST /users`, `PUT /users/:id`, `PATCH /users/:id/status`, `POST /users/:id/reset-password`, `GET /users/:id/attendance-records` | admin |
+| Members | `GET·POST /members`, `GET·PUT /members/:id`, `PATCH /members/:id/status`, `GET /members/:id/attendance` | admin |
+| Services | `GET /services`, `GET /services/:id` | admin + usher |
+| Services | `POST /services`, `PUT /services/:id`, `GET /services/:id/attendance` | admin |
+| Attendance | `GET /attendance/roster/:serviceId`, `POST /attendance` | admin + usher |
+| Attendance | `PUT /attendance/:id` | admin (or own record within usher window) |
+| Attendance | `GET /attendance`, `GET /attendance/:id`, `DELETE /attendance/:id` | admin |
+| Groups/Locations | `GET …` shared · `POST·PUT·DELETE …` admin |
+| Follow-ups | `/followups` CRUD | admin |
+| Reports | `GET /reports/dashboard`, `GET /reports/summary` | admin |
+| Settings | `GET /settings/public` shared · `GET·PUT /settings` admin |
+
+Validation errors return `400 { message, errors:[{field,message}] }`; authorization
+failures return clear `401`/`403` messages.
+
+## Project structure
+
+```
+server/
+  src/
+    config/     env.js db.js
+    middleware/ auth.js (authenticate, requireAdmin) error.js
+    routes/     auth users members services attendance groups locations followups reports settings index
+    services/   stats.js (streak recompute) settings.js
+    utils/      errors validate tokens passwords
+  migrations/   001_init.sql
+  scripts/      migrate.js seed.js
+  tests/        global-setup helpers auth rbac members services attendance users
+client/
+  src/
+    api/          fetch wrapper w/ silent refresh
+    auth/         context + route guards
+    components/   ui/ (forms display feedback Table Modal SearchInput) layout/ charts/
+    hooks/        useFetch useDebounce useRoster
+    pages/        login, denied, 404, admin/* (8 pages), usher/* (2 pages)
+    styles.css    design tokens + components + responsive rules
+```
+
+## Design notes
+
+- Palette: white surfaces, blue primary (`#1d4ed8` family), yellow accent (`#f59e0b`),
+  deep navy sidebar — per the final colour directive (white/blue/yellow).
+- Status colours: green Present, red Absent, blue Excused, neutral Inactive.
+- Tables collapse into labelled cards on small screens; forms are fully labelled
+  with `aria-invalid`/`aria-describedby`, dialogs trap focus and close on Esc;
+  reduced-motion preferences are respected.
+
+## Assumptions & limitations
+
+- Demo credentials appear on the login card **only in dev builds**
+  (`VITE_SHOW_DEMO_HINTS=false` hides them).
+- `consecutive_absences` counts leading consecutive `absent` marks; `excused` pauses
+  the streak without punishing, `present` resets it.
+- CSV export is generated client-side from paginated API data.
+- SameSite=Lax cookies + JSON-only APIs are the CSRF mitigation strategy; add a
+  token header if you embed the API behind a different origin.
