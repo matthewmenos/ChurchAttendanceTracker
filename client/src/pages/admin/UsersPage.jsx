@@ -136,7 +136,7 @@ export default function UsersPage() {
                     <Avatar name={u.name} size='sm' />
                     <span>
                       <span className='row-title'>{u.name} {me && me.id === u.id ? <Badge variant='info'>You</Badge> : null}</span>
-                      <span className='muted small block'>{u.email}{u.username ?  · @${u.username} : ''}</span>
+                      <span className='muted small block'>{u.email}{u.username ? ` · @${u.username}` : ''}</span>
                     </span>
                   </span>
                 ),
