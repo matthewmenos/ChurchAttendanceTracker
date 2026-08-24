@@ -198,9 +198,11 @@ Vercel does not include a database, so create one first —
 2. Supabase / Railway / Render Postgres work equally well; any TCP-reachable
    Postgres 13+ is fine. TLS is auto-detected from `sslmode=` in the URL.
 
-### 2 · Apply migrations & create the first admin
+### 2 · Database setup — automatic (no terminal needed)
 
-Run these locally against the cloud database (PowerShell):
+The app **self-bootstraps**: on its first request it applies pending migrations automatically and, if you set ADMIN_EMAIL + ADMIN_PASSWORD environment variables and no users exist yet, creates that admin for you (password change forced at first login). Nothing to run by hand.
+
+Prefer doing it manually instead? Run these locally against the cloud database:
 
 ```powershell
 $env:DATABASE_URL = "postgres://user:pass@host/db?sslmode=require"
