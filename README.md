@@ -176,3 +176,75 @@ client/
 - CSV export is generated client-side from paginated API data.
 - SameSite=Lax cookies + JSON-only APIs are the CSRF mitigation strategy; add a
   token header if you embed the API behind a different origin.
+---
+
+## 🚀 Deploying to Vercel
+
+Recommended topology: **one Vercel project** that serves the React build as static
+files and runs the Express API as a Serverless Function behind `/api/*`.
+Same-origin means cookies and CORS work exactly like local development.
+
+The repo is already wired for this: `api/index.js` (serverless entry),
+`vercel.json` (build + rewrites incl. SPA fallback), and root `package.json`
+carries the server dependencies so Vercel bundles them.
+
+### 1 · Provision PostgreSQL (one-time)
+
+Vercel does not include a database, so create one first —
+[Neon](https://neon.tech) has a free tier and works great:
+
+1. Sign up → **New Project** → copy the **pooled connection string**
+   (`postgres://…?sslmode=require`).
+2. Supabase / Railway / Render Postgres work equally well; any TCP-reachable
+   Postgres 13+ is fine. TLS is auto-detected from `sslmode=` in the URL.
+
+### 2 · Apply migrations & create the first admin
+
+Run these locally against the cloud database (PowerShell):
+
+```powershell
+$env:DATABASE_URL = "postgres://user:pass@host/db?sslmode=require"
+npm run migrate
+npm run create:admin -- "Pastor Kwesi Mensah" "admin@copagonaahanta.app" "ChangeMe-123"
+```
+
+`create:admin` upserts a single admin (no demo data). Prefer sample data to
+explore first? Use `npm run seed` instead, then reset that password later.
+
+### 3 · Import the repo on Vercel
+
+1. Push the project to GitHub (`.gitignore` already excludes `.env`, `.vercel/`).
+2. <https://vercel.com/new> → import the repository.
+3. Framework Preset **Other** — build/output settings come from `vercel.json`
+   (builds `client/`, serves `client/dist`, routes `/api/*` to the function).
+4. Deploy — it will fail-safe until env vars exist; add them now:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | your Neon/Supabase connection string |
+| `JWT_ACCESS_SECRET` | long random string — `openssl rand -hex 32` |
+| `JWT_REFRESH_SECRET` | different long random string |
+| `COOKIE_SECURE` | `true` |
+| `BCRYPT_ROUNDS` | `10` |
+
+5. Redeploy → open `https://<your-app>.vercel.app`, sign in as the admin,
+   change the temp password, create usher accounts under **Users**.
+
+### Alternative: split hosting
+
+Frontend on Vercel + always-on API on Render/Railway/Fly also works. Point the
+frontend proxy at nothing (use absolute API URL by serving client from the API
+or adding a reverse proxy) and set on the **API host**:
+
+```
+CORS_ORIGIN=https://<your-app>.vercel.app
+COOKIE_SECURE=true
+COOKIE_SAMESITE=none     # required for cross-site cookies
+```
+
+### Serverless notes & limits
+
+- The in-memory login rate limiter is per-instance (best-effort on serverless).
+- Each function instance keeps its own small pg pool (max 10) — use Neon pooled
+  connections to stay under connection limits.
+- Migrations never run automatically on deploy; run them manually per step 2.

@@ -4,15 +4,25 @@
   "private": true,
   "description": "Full-stack church attendance tracker (React + Express + PostgreSQL)",
   "scripts": {
-    "install:all": "npm install --prefix server && npm install --prefix client",
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
     "dev:server": "npm run dev --prefix server",
     "dev:client": "npm run dev --prefix client",
     "dev": "concurrently -n api,web -c blue,yellow \"npm run dev:server\" \"npm run dev:client\"",
     "migrate": "npm run migrate --prefix server",
     "seed": "npm run seed --prefix server",
+    "create:admin": "node server/scripts/create-admin.js",
     "test": "npm test --prefix server",
     "build": "npm run build --prefix client",
     "start": "npm start --prefix server"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.12.0"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

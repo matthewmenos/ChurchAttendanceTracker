@@ -17,6 +17,8 @@ const config = {
   accessTtlMinutes: Number(process.env.ACCESS_TOKEN_TTL_MINUTES || 15),
   refreshTokenTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS || 7),
   cookieSecure: String(process.env.COOKIE_SECURE || 'false') === 'true',
+  // 'lax' for same-origin (Vercel monolith). Use 'none' only for split hosting.
+  cookieSameSite: process.env.COOKIE_SAMESITE || 'lax',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   bcryptRounds: Number(process.env.BCRYPT_ROUNDS || (isTest ? 4 : 10)),
   seed: {

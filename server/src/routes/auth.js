@@ -39,7 +39,7 @@ function clearAttempts(key) {
 
 // ---------- cookies ----------
 function cookieOpts(maxAgeMs) {
-  return { httpOnly: true, secure: env.cookieSecure, sameSite: 'lax', path: '/', maxAge: maxAgeMs };
+  return { httpOnly: true, secure: env.cookieSecure, sameSite: env.cookieSameSite, path: '/', maxAge: maxAgeMs };
 }
 
 function setAuthCookies(res, accessToken, refreshToken) {
@@ -48,7 +48,7 @@ function setAuthCookies(res, accessToken, refreshToken) {
 }
 
 function clearAuthCookies(res) {
-  const opts = { httpOnly: true, secure: env.cookieSecure, sameSite: 'lax', path: '/' };
+  const opts = { httpOnly: true, secure: env.cookieSecure, sameSite: env.cookieSameSite, path: '/' };
   res.clearCookie(ACCESS_COOKIE, opts);
   res.clearCookie(REFRESH_COOKIE, opts);
 }
