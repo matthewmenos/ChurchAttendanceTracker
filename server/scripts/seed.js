@@ -22,6 +22,18 @@ function fmtDate(d) {
 }
 
 async function main() {
+  // Refuse to run without credentials from the environment (never hardcode).
+  const missingSeed = [
+    ['SEED_ADMIN_EMAIL', env.seed.adminEmail],
+    ['SEED_ADMIN_PASSWORD', env.seed.adminPassword],
+    ['SEED_USHER_EMAIL', env.seed.usherEmail],
+    ['SEED_USHER_PASSWORD', env.seed.usherPassword],
+  ].filter(([, v]) => !v);
+  if (missingSeed.length) {
+    console.error('Seed aborted - set these in server/.env first:');
+    for (const [key] of missingSeed) console.error('  ' + key + '=...');
+    process.exit(1);
+  }
   console.log('Seeding database...');
   // Wipe previous demo data so the seed can be re-run safely.
   // (settings are kept — admins may have customised them)
@@ -49,7 +61,7 @@ async function main() {
   const { rows: u2Rows } = await db.query(
     `INSERT INTO users (name, email, password_hash, role, created_by)
      VALUES ($1, $2, $3, 'usher', $4) RETURNING id`,
-    ['Daniel Okafor', 'daniel.usher@copagonaahanta.app', usherHash, adminId]
+    ['Daniel Okafor', process.env.SEED_USHER2_EMAIL || "daniel@${env.seed.usherEmail.split('@')[1]}", usherHash, adminId]
   );
   const usher2 = u2Rows[0].id;
 
@@ -224,7 +236,7 @@ async function main() {
   console.log('Seed complete! Demo accounts:');
   console.log(`  Admin : ${env.seed.adminEmail} / ${env.seed.adminPassword}`);
   console.log(`  Usher : ${env.seed.usherEmail} / ${env.seed.usherPassword}`);
-  console.log('  Usher : daniel.usher@copagonaahanta.app / same password as above');
+  console.log("  Usher : daniel@${env.seed.usherEmail.split('@')[1]} / same password as above");
   console.log(`Members: ${memberIds.length}, Services: ${serviceIds.length}, Follow-up plans: ${absentees.length}`);
 }
 

@@ -19,14 +19,20 @@ async function bootstrap() {
 
   const email = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
   const password = process.env.ADMIN_PASSWORD || '';
-  if (!email || !password) return;
+  if (!email || !password) {
+    console.log('Admin bootstrap skipped: ADMIN_EMAIL / ADMIN_PASSWORD are not set.');
+    return;
+  }
   if (password.length < 8) {
     console.error('ADMIN_PASSWORD ignored: must be at least 8 characters.');
     return;
   }
 
   const { rows } = await db.query('SELECT COUNT(*)::int AS n FROM users');
-  if (rows[0].n > 0) return;
+  if (rows[0].n > 0) {
+    console.log(`Admin bootstrap skipped: ${rows[0].n} user(s) already exist.`);
+    return;
+  }
 
   await db.query(
     `INSERT INTO users (name, email, password_hash, role, must_change_password)

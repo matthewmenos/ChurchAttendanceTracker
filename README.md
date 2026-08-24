@@ -56,15 +56,22 @@ npm run dev                # API on http://localhost:4000 + web on http://localh
 The Vite dev server proxies `/api` to the backend, so cookies just work.
 For production: `npm run build` then `npm start` — Express serves `client/dist`.
 
-### Default demo accounts (created by seed)
+### Accounts — no defaults anywhere
 
-| Role | Email | Password |
-|---|---|---|
-| Main Admin | `admin@copagonaahanta.app` | `Admin@12345` |
-| Usher | `usher@copagonaahanta.app` | `Usher@12345` |
-| Usher | `daniel.usher@copagonaahanta.app` | same as above |
+There is deliberately **no public sign-up**, and **no password is hardcoded** in
+this codebase — accounts exist only in your database.
 
-> There is deliberately **no public sign-up** anywhere — only admins create accounts.
+- **Local demo data** (`npm run seed`): reads `SEED_ADMIN_EMAIL`,
+  `SEED_ADMIN_PASSWORD`, `SEED_USHER_EMAIL`, `SEED_USHER_PASSWORD` from
+  `server/.env` (template in `.env.example`) and refuses to run when missing.
+- **Production**: the first admin is created automatically from the
+  `ADMIN_EMAIL` / `ADMIN_PASSWORD` env vars on the first request after deploy —
+  but **only while the users table is empty**. Ushers are created by that admin
+  inside the app (one-time temporary passwords).
+- Changing `ADMIN_PASSWORD` in Vercel later does **not** update an existing
+  account. To rotate: in Neon's SQL Editor run
+  `DELETE FROM users WHERE email = 'the-old-email';` then redeploy — the
+  bootstrap re-creates the admin from the current env values.
 
 ### Tests
 
@@ -169,8 +176,7 @@ client/
 
 ## Assumptions & limitations
 
-- Demo credentials appear on the login card **only in dev builds**
-  (`VITE_SHOW_DEMO_HINTS=false` hides them).
+- The sign-in page shows **no demo credentials** — nothing about accounts is hardcoded client-side.
 - `consecutive_absences` counts leading consecutive `absent` marks; `excused` pauses
   the streak without punishing, `present` resets it.
 - CSV export is generated client-side from paginated API data.

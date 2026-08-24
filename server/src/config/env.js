@@ -21,13 +21,15 @@ const config = {
   cookieSameSite: process.env.COOKIE_SAMESITE || 'lax',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   bcryptRounds: Number(process.env.BCRYPT_ROUNDS || (isTest ? 4 : 10)),
+  // Seed/demo credentials come ONLY from env - no defaults, ever.
+  // 'npm run seed' aborts if these are missing.
   seed: {
     adminName: process.env.SEED_ADMIN_NAME || 'Main Admin',
-    adminEmail: process.env.SEED_ADMIN_EMAIL || 'admin@copagonaahanta.app',
-    adminPassword: process.env.SEED_ADMIN_PASSWORD || 'Admin@12345',
+    adminEmail: process.env.SEED_ADMIN_EMAIL || '',
+    adminPassword: process.env.SEED_ADMIN_PASSWORD || '',
     usherName: process.env.SEED_USHER_NAME || 'Grace Usher',
-    usherEmail: process.env.SEED_USHER_EMAIL || 'usher@copagonaahanta.app',
-    usherPassword: process.env.SEED_USHER_PASSWORD || 'Usher@12345',
+    usherEmail: process.env.SEED_USHER_EMAIL || '',
+    usherPassword: process.env.SEED_USHER_PASSWORD || '',
   },
 };
 

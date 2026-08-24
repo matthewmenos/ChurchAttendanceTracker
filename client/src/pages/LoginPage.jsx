@@ -5,8 +5,6 @@ import { api } from '../api/client.js';
 import { Alert } from '../components/ui/feedback.jsx';
 import { Button, Field, Input } from '../components/ui/forms.jsx';
 
-const SHOW_HINTS = import.meta.env.DEV && import.meta.env.VITE_SHOW_DEMO_HINTS !== 'false';
-
 export default function LoginPage() {
   const { user, initializing, login } = useAuth();
   const navigate = useNavigate();
@@ -24,7 +22,7 @@ export default function LoginPage() {
         if (data && data.churchName) setChurchName(data.churchName);
       })
       .catch(() => {
-        // endpoint unreachable — generic branding is fine on the error path
+        // branding endpoint unreachable — heading falls back below
       });
   }, []);
 
@@ -68,7 +66,7 @@ export default function LoginPage() {
               autoComplete='username'
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder='you@copagonaahanta.app'
+              placeholder='your work email'
               required
             />
           </Field>
@@ -84,14 +82,6 @@ export default function LoginPage() {
           </Field>
           <Button type='submit' loading={busy} className='btn-block btn-lg'>Sign in</Button>
         </form>
-
-        {SHOW_HINTS && (
-          <div className='demo-hints'>
-            <strong>Demo accounts (dev only)</strong>
-            <code>admin@copagonaahanta.app / Admin@12345</code>
-            <code>usher@copagonaahanta.app / Usher@12345</code>
-          </div>
-        )}
 
         <p className='login-foot muted'>Accounts are issued by the church administrator. Contact them if you need access.</p>
       </div>
