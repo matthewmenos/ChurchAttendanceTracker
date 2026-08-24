@@ -53,6 +53,7 @@ export default function UsersPage() {
     const payload = {
       name: form.get('name'),
       email: form.get('email'),
+      username: form.get('username'),
       phone: form.get('phone'),
       role: editing ? undefined : form.get('role'),
     };
@@ -135,7 +136,7 @@ export default function UsersPage() {
                     <Avatar name={u.name} size='sm' />
                     <span>
                       <span className='row-title'>{u.name} {me && me.id === u.id ? <Badge variant='info'>You</Badge> : null}</span>
-                      <span className='muted small block'>{u.email}</span>
+                      <span className='muted small block'>{u.email}{u.username ?  · @${u.username} : ''}</span>
                     </span>
                   </span>
                 ),
@@ -176,8 +177,11 @@ export default function UsersPage() {
           <Field label='Full name' id='u-name' required>
             <Input id='u-name' name='name' defaultValue={editing ? editing.name : ''} required maxLength={120} />
           </Field>
-          <Field label='Email' id='u-email' required hint='This is their username for signing in.'>
+          <Field label='Email' id='u-email' required hint='Used for sign-in and account notices.'>
             <Input id='u-email' name='email' type='email' defaultValue={editing ? editing.email : ''} required maxLength={200} />
+          </Field>
+          <Field label='Username' id='u-username' hint='Optional — they can sign in with this instead of their email.'>
+            <Input id='u-username' name='username' defaultValue={editing ? editing.username : ''} maxLength={40} />
           </Field>
           <Field label='Phone' id='u-phone' hint='Optional'>
             <Input id='u-phone' name='phone' defaultValue={editing ? editing.phone : ''} maxLength={40} />

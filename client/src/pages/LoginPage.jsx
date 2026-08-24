@@ -60,13 +60,13 @@ export default function LoginPage() {
 
         <form onSubmit={submit} noValidate>
           {error && <Alert variant='error'>{error}</Alert>}
-          <Field label='Email address' id='login-email' required>
+          <Field label='Email or username' id='login-email' required>
             <Input
               type='email'
               autoComplete='username'
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder='your work email'
+              placeholder='email or username'
               required
             />
           </Field>

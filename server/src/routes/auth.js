@@ -2,7 +2,7 @@ const express = require('express');
 const db = require('../config/db');
 const env = require('../config/env');
 const { ApiError, asyncHandler } = require('../utils/errors');
-const { vEmail, vStr } = require('../utils/validate');
+const { vStr } = require('../utils/validate');
 const { verifyPassword, hashPassword } = require('../utils/passwords');
 const { sha256, signAccessToken, signRefreshToken, verifyRefreshToken } = require('../utils/tokens');
 const { authenticate, ACCESS_COOKIE, REFRESH_COOKIE } = require('../middleware/auth');
@@ -56,7 +56,7 @@ function clearAuthCookies(res) {
 // ---------- helpers ----------
 async function loadPublicUser(id) {
   const { rows } = await db.query(
-    `SELECT u.id, u.name, u.email, u.role, u.status, u.must_change_password, u.last_login_at,
+    `SELECT u.id, u.name, u.email, u.username, u.role, u.status, u.must_change_password, u.last_login_at,
             (SELECT value FROM settings WHERE key = 'church_name') AS church_name
        FROM users u
       WHERE u.id = $1`,
@@ -68,6 +68,7 @@ async function loadPublicUser(id) {
     id: u.id,
     name: u.name,
     email: u.email,
+    username: u.username || null,
     role: u.role,
     status: u.status,
     must_change_password: u.must_change_password,
@@ -88,15 +89,19 @@ async function startSession(res, user) {
 
 // ---------- routes ----------
 router.post('/login', asyncHandler(async (req, res) => {
-  const email = vEmail(req.body, 'email', { required: true });
+  // The sign-in field accepts an email address OR a username.
+  const identifier = vStr(req.body, 'email', { required: true, max: 200, label: 'Email or username' }).toLowerCase();
   const password = vStr(req.body, 'password', { required: true, max: 200 });
 
-  const key = `${req.ip}:${email}`;
+  const key = `${req.ip}:${identifier}`;
   if (tooManyAttempts(key)) {
     throw new ApiError(429, 'Too many sign-in attempts. Please try again in a few minutes.');
   }
 
-  const { rows } = await db.query('SELECT * FROM users WHERE lower(email) = $1', [email]);
+  const { rows } = await db.query(
+    'SELECT * FROM users WHERE lower(email) = $1 OR (username IS NOT NULL AND lower(username) = $1) LIMIT 1',
+    [identifier]
+  );
   const user = rows[0];
   const passwordOk = user ? await verifyPassword(password, user.password_hash) : false;
   if (!user || !passwordOk) {

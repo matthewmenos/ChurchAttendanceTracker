@@ -65,7 +65,7 @@ this codebase — accounts exist only in your database.
   `SEED_ADMIN_PASSWORD`, `SEED_USHER_EMAIL`, `SEED_USHER_PASSWORD` from
   `server/.env` (template in `.env.example`) and refuses to run when missing.
 - **Production**: the first admin is created automatically from the
-  `ADMIN_EMAIL` / `ADMIN_PASSWORD` env vars on the first request after deploy —
+  `ADMIN_EMAIL` / `ADMIN_PASSWORD` env vars (plus optional `ADMIN_USERNAME`) on the first request after deploy —
   but **only while the users table is empty**. Ushers are created by that admin
   inside the app (one-time temporary passwords).
 - Changing `ADMIN_PASSWORD` in Vercel later does **not** update an existing
@@ -234,6 +234,7 @@ explore first? Use `npm run seed` instead, then reset that password later.
 | `JWT_REFRESH_SECRET` | different long random string |
 | `COOKIE_SECURE` | `true` |
 | `BCRYPT_ROUNDS` | `10` |
+| `ADMIN_USERNAME` | optional — lets the first admin sign in with a username instead of email |
 
 5. Redeploy → open `https://<your-app>.vercel.app`, sign in as the admin,
    change the temp password, create usher accounts under **Users**.

@@ -131,3 +131,15 @@ describe('Authentication', () => {
     expect(res.body.db).toBeDefined();
   });
 });
+describe('Username sign-in', () => {
+  test('a user can sign in with their username instead of email', async () => {
+    await resetTables();
+    const u = await createUser({ email: 'withname@test.app' });
+    await db.query('UPDATE users SET username = $1 WHERE id = $2', ['ChiefUsher', u.id]);
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'chiefusher', password: 'Passw0rd!' });
+    expect(res.status).toBe(200);
+    expect(res.body.user.username).toBe('ChiefUsher');
+  });
+});

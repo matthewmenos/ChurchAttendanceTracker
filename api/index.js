@@ -34,12 +34,33 @@ async function bootstrap() {
     return;
   }
 
-  await db.query(
-    `INSERT INTO users (name, email, password_hash, role, must_change_password)
-     VALUES ($1, $2, $3, 'admin', TRUE)
-     ON CONFLICT (email) DO NOTHING`,
-    [process.env.ADMIN_NAME || 'Main Admin', email, await hashPassword(password)]
-  );
+  const rawUsername = String(process.env.ADMIN_USERNAME || '').trim();
+  const username = /^[A-Za-z0-9._-]{3,40}$/.test(rawUsername) ? rawUsername : '';
+  if (rawUsername && !username) {
+    console.log('ADMIN_USERNAME ignored: use 3-40 letters, numbers, dots, hyphens or underscores.');
+  }
+
+  const hash = await hashPassword(password);
+  try {
+    await db.query(
+      `INSERT INTO users (name, email, username, password_hash, role, must_change_password)
+       VALUES ($1, $2, $3, $4, 'admin', TRUE)
+       ON CONFLICT (email) DO NOTHING`,
+      [process.env.ADMIN_NAME || 'Main Admin', email, username || null, hash]
+    );
+  } catch (e) {
+    if (e.code === '23505') {
+      await db.query(
+        `INSERT INTO users (name, email, password_hash, role, must_change_password)
+         VALUES ($1, $2, $3, 'admin', TRUE)
+         ON CONFLICT (email) DO NOTHING`,
+        [process.env.ADMIN_NAME || 'Main Admin', email, hash]
+      );
+      console.log('ADMIN_USERNAME was already taken - admin created without a username.');
+    } else {
+      throw e;
+    }
+  }
   console.log(`Bootstrap admin created for ${email} (password change required at first login).`);
 }
 

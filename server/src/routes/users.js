@@ -15,6 +15,7 @@ function cleanUser(u) {
     id: u.id,
     name: u.name,
     email: u.email,
+    username: u.username || null,
     phone: u.phone,
     role: u.role,
     status: u.status,
@@ -38,6 +39,23 @@ async function findUser(id) {
   return rows[0];
 }
 
+/** Optional username: 3-40 chars (letters, numbers, dot, hyphen, underscore), unique. */
+async function checkUsername(raw, currentId = null) {
+  if (raw === undefined || raw === null) return undefined; // not provided -> keep as-is
+  const value = String(raw).trim();
+  if (!value) return null; // provided but empty -> clear it
+  if (!/^[A-Za-z0-9._-]{3,40}$/.test(value)) {
+    throw new ApiError(400, 'Usernames use 3-40 letters, numbers, dots, hyphens or underscores.', [
+      { field: 'username', message: 'Invalid username.' },
+    ]);
+  }
+  const dup = await db.query(
+    'SELECT id FROM users WHERE lower(username) = lower($1) AND id <> $2',
+    [value, currentId || 0]
+  );
+  if (dup.rows.length) throw new ApiError(409, 'That username is already taken.');
+  return value;
+}
 router.get('/', asyncHandler(async (req, res) => {
   const { rows } = await db.query(
     `SELECT u.*, c.name AS created_by_name,
@@ -57,15 +75,16 @@ router.post('/', asyncHandler(async (req, res) => {
 
   const dup = await db.query('SELECT id FROM users WHERE lower(email) = $1', [email]);
   if (dup.rows.length) throw new ApiError(409, 'A user account with this email already exists.');
+  const username = (await checkUsername(req.body ? req.body.username : undefined, null)) ?? null;
 
   // Admin issues credentials: we generate a one-time temporary password.
   const temporaryPassword = generateTempPassword();
   const hash = await hashPassword(temporaryPassword);
   const { rows } = await db.query(
-    `INSERT INTO users (name, email, phone, password_hash, role, must_change_password, created_by)
-     VALUES ($1, $2, $3, $4, $5, TRUE, $6)
+    `INSERT INTO users (name, email, phone, username, password_hash, role, must_change_password, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7)
      RETURNING id`,
-    [name, email, phone, hash, role, req.user.id]
+    [name, email, phone, username, hash, role, req.user.id]
   );
   const user = await findUser(rows[0].id);
   res.status(201).json({ user: cleanUser(user), temporaryPassword });
