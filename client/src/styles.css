@@ -211,6 +211,8 @@ select.input { appearance: auto; }
 .card-head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-top: 16px; }
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
 .stat-grid-4 { grid-template-columns: repeat(4, 1fr); }
+.stat-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.stat-pct { font-size: .72em; font-weight: 600; color: var(--ink-500); }
 .stat-card {
   background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
   padding: 14px 16px; box-shadow: var(--shadow-sm);

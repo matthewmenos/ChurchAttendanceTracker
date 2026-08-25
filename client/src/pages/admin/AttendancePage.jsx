@@ -21,6 +21,44 @@ const STATUS_FILTERS = [
   ['excused', 'Excused'],
 ];
 
+function pct(part, total) {
+  if (!total) return '0%';
+  return `${Math.round((part / total) * 100)}%`;
+}
+
+function genderLine(g) {
+  const bits = [];
+  if (g.male) bits.push(`${g.male} M`);
+  if (g.female) bits.push(`${g.female} F`);
+  if (g.unspecified) bits.push(`${g.unspecified} —`);
+  return bits.length ? bits.join(' · ') : '—';
+}
+
+/** Present / Absent / Excused totals with percentages and gender groupings. */
+function AttendanceSummary({ totals, eligible }) {
+  const base = totals.marked || (totals.present + totals.absent + totals.excused) || 0;
+  const cards = [
+    { label: 'Present', count: totals.present, tone: 'green', gender: { male: totals.present_male, female: totals.present_female, unspecified: totals.present_unspecified }, hint: 'checked in at the service' },
+    { label: 'Absent', count: totals.absent, tone: 'red', gender: { male: totals.absent_male, female: totals.absent_female, unspecified: 0 }, hint: 'expected but not present' },
+    { label: 'Excused', count: totals.excused, tone: 'blue', gender: { male: totals.excused_male, female: totals.excused_female, unspecified: 0 }, hint: 'let the church know' },
+  ];
+  return (
+    <section className='stat-grid stat-grid-3' aria-label='Attendance summary'>
+      {cards.map((c) => (
+        <div key={c.label} className={`stat-card stat-${c.tone}`}>
+          <div className='stat-label'>{c.label}</div>
+          <div className='stat-value'>{c.count} <span className='stat-pct'>{pct(c.count, base)}</span></div>
+          <div className='stat-sub'>Genders: {genderLine(c.gender)}</div>
+          <div className='stat-sub muted'>{c.hint}</div>
+        </div>
+      ))}
+      <p className='muted small' style={{ gridColumn: '1 / -1', margin: 0 }}>
+        Percentages are shares of recorded marks ({base} member{base === 1 ? '' : 's'}). Unmarked members are not a gender split.
+      </p>
+    </section>
+  );
+}
+
 export default function AttendancePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const servicesQ = useFetch(() => api('/services', { params: { pageSize: 100 } }), []);
@@ -159,6 +197,10 @@ export default function AttendancePage() {
         ))}
         {roster.data && <span className='muted small'>Showing {rows.length} of {roster.data.totalEligible} members</span>}
       </div>
+
+      {roster.data && roster.data.service && roster.data.service.totals && (
+        <AttendanceSummary totals={roster.data.service.totals} eligible={roster.data.totalEligible} />
+      )}
 
       {saveError && !saving && <Alert variant='error' onClose={() => setSaveError(null)}>{saveError}</Alert>}
       {closed && (
