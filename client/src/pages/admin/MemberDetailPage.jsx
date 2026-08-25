@@ -73,11 +73,12 @@ export default function MemberDetailPage() {
           <h1>{member.full_name}</h1>
           <div className='badge-row'>
             <Badge variant={member.status}>{member.status === 'active' ? 'Active' : 'Inactive'}</Badge>
-            {member.group_name && <Badge variant='info'>{member.group_name}</Badge>}
+            {(member.groups || []).map((g) => <Badge key={g.id} variant='info'>{g.name}</Badge>)}
             {member.consecutive_absences >= 3 && <Badge variant='high'>{member.consecutive_absences} weeks absent <IconTriangleAlert size={11} /></Badge>}
           </div>
           <p className='muted'>
             {member.email || 'No email on file'} · {member.phone || 'No phone on file'}<br />
+            {member.birthday ? <>Birthday: {formatDate(member.birthday)}<br /></> : null}
             Last attended: {member.last_attended ? formatDate(member.last_attended) : 'Never'}
           </p>
           {member.notes && <p className='member-notes'>{member.notes}</p>}

@@ -9,11 +9,15 @@ router.use(authenticate, requireAdmin);
 
 async function findFollowUp(id) {
   const { rows } = await db.query(
-    `SELECT f.*, m.full_name AS member_name, g.name AS group_name,
+    `SELECT f.*, m.full_name AS member_name,
+            COALESCE((
+              SELECT string_agg(g.name, ', ' ORDER BY g.name)
+                FROM member_group_assignments mga JOIN member_groups g ON g.id = mga.group_id
+               WHERE mga.member_id = m.id
+            ), '') AS group_name,
             m.consecutive_absences, u.name AS created_by_name
        FROM follow_ups f
        JOIN members m ON m.id = f.member_id
-       LEFT JOIN member_groups g ON g.id = m.group_id
        LEFT JOIN users u ON u.id = f.created_by
       WHERE f.id = $1`,
     [id]
@@ -34,11 +38,15 @@ router.get('/', asyncHandler(async (req, res) => {
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
   const { rows } = await db.query(
-    `SELECT f.*, m.full_name AS member_name, g.name AS group_name,
+    `SELECT f.*, m.full_name AS member_name,
+            COALESCE((
+              SELECT string_agg(g.name, ', ' ORDER BY g.name)
+                FROM member_group_assignments mga JOIN member_groups g ON g.id = mga.group_id
+               WHERE mga.member_id = m.id
+            ), '') AS group_name,
             m.consecutive_absences, u.name AS created_by_name
        FROM follow_ups f
        JOIN members m ON m.id = f.member_id
-       LEFT JOIN member_groups g ON g.id = m.group_id
        LEFT JOIN users u ON u.id = f.created_by
        ${whereSql}
       ORDER BY CASE f.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,

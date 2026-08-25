@@ -13,7 +13,7 @@ import { Pagination, Table } from '../../components/ui/Table.jsx';
 import { formatShortDate } from '../../utils/format.js';
 import { IconUsers, IconTriangleAlert } from '../../components/ui/icons.jsx';
 
-const EMPTY_FORM = { fullName: '', email: '', phone: '', groupId: '', status: 'active', notes: '' };
+const EMPTY_FORM = { fullName: '', email: '', phone: '', groupIds: [], birthday: '', status: 'active', notes: '' };
 
 export default function MembersPage() {
   const toast = useToast();
@@ -60,7 +60,8 @@ export default function MembersPage() {
       fullName: form.get('fullName'),
       email: form.get('email'),
       phone: form.get('phone'),
-      groupId: form.get('groupId') || null,
+      groupIds: form.getAll('groupIds').map(Number),
+      birthday: form.get('birthday') || null,
       status: form.get('status') || undefined,
       notes: form.get('notes'),
     };
@@ -154,7 +155,11 @@ export default function MembersPage() {
                   </span>
                 ),
               },
-              { key: 'group_name', label: 'Group', render: (m) => m.group_name || '—' },
+              { key: 'group_name', label: 'Groups', render: (m) => (
+                (m.groups && m.groups.length)
+                  ? m.groups.map((g) => <Badge key={g.id} variant='info'>{g.name}</Badge>)
+                  : '—'
+              ) },
               { key: 'phone', label: 'Phone', render: (m) => m.phone || '—' },
               { key: 'status', label: 'Status', render: (m) => <Badge variant={m.status}>{m.status === 'active' ? 'Active' : 'Inactive'}</Badge> },
               { key: 'last_attended', label: 'Last attended', render: (m) => (m.last_attended ? formatShortDate(m.last_attended) : 'Never') },
@@ -201,14 +206,24 @@ export default function MembersPage() {
               <Input id='m-phone' name='phone' defaultValue={editing ? editing.phone : ''} maxLength={40} />
             </Field>
           </div>
+          <Field label='Groups' id='m-groups' hint='A member can belong to more than one group.'>
+            <div className='checkbox-row'>
+              {((groupsQ.data && groupsQ.data.items) || []).map((g) => (
+                <label key={g.id} className='checkbox'>
+                  <input
+                    type='checkbox'
+                    name='groupIds'
+                    value={g.id}
+                    defaultChecked={editing ? (editing.group_ids || []).includes(g.id) : false}
+                  />
+                  <span>{g.name}</span>
+                </label>
+              ))}
+            </div>
+          </Field>
           <div className='field-row'>
-            <Field label='Group' id='m-group'>
-              <Select id='m-group' name='groupId' defaultValue={editing && editing.group_id ? String(editing.group_id) : ''}>
-                <option value=''>No group</option>
-                {((groupsQ.data && groupsQ.data.items) || []).map((g) => (
-                  <option key={g.id} value={g.id}>{g.name}</option>
-                ))}
-              </Select>
+            <Field label='Birthday' id='m-birthday' hint='Used for the birthday message.'>
+              <Input id='m-birthday' name='birthday' type='date' defaultValue={editing ? editing.birthday || '' : ''} />
             </Field>
             <Field label='Status' id='m-status'>
               <Select id='m-status' name='status' defaultValue={editing ? editing.status : 'active'}>

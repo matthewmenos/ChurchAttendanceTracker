@@ -3,7 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { api } from '../api/client.js';
 import { Alert } from '../components/ui/feedback.jsx';
-import { Button, Field, Input } from '../components/ui/forms.jsx';
+import { Button, Field, Input, PasswordInput } from '../components/ui/forms.jsx';
 import { IconChurch } from '../components/ui/icons.jsx';
 
 export default function LoginPage() {
@@ -72,8 +72,7 @@ export default function LoginPage() {
             />
           </Field>
           <Field label='Password' id='login-password' required>
-            <Input
-              type='password'
+            <PasswordInput
               autoComplete='current-password'
               value={password}
               onChange={(e) => setPassword(e.target.value)}

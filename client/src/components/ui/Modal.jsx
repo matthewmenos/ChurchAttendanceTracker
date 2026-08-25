@@ -7,6 +7,15 @@ let openCount = 0;
 
 export function Modal({ open, title, onClose, children, footer, width }) {
   const ref = useRef(null);
+  // Keep the latest onClose in a ref so the open/close effect below does NOT
+  // re-run when callers pass an inline arrow (new identity every render).
+  // Re-running it used to re-trigger the initial-focus timer on every
+  // keystroke, yanking the caret back to the first field while typing.
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!open) return undefined;
@@ -15,7 +24,7 @@ export function Modal({ open, title, onClose, children, footer, width }) {
     document.body.style.overflow = 'hidden';
 
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
       if (e.key === 'Tab' && ref.current) {
         const focusables = ref.current.querySelectorAll(
           'button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])'
@@ -48,7 +57,7 @@ export function Modal({ open, title, onClose, children, footer, width }) {
       if (openCount === 0) document.body.style.overflow = '';
       if (previous && previous.focus) previous.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return createPortal(

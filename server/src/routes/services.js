@@ -132,11 +132,15 @@ router.get('/:id/attendance', authenticate, requireAdmin, asyncHandler(async (re
 
   const { rows } = await db.query(
     `SELECT a.id, a.status, a.notes, a.recorded_at, a.updated_at,
-            a.member_id, m.full_name AS member_name, g.name AS group_name,
+            a.member_id, m.full_name AS member_name,
+            COALESCE((
+              SELECT string_agg(g.name, ', ' ORDER BY g.name)
+                FROM member_group_assignments mga JOIN member_groups g ON g.id = mga.group_id
+               WHERE mga.member_id = m.id
+            ), '') AS group_name,
             ru.name AS recorded_by_name, uu.name AS updated_by_name
        FROM attendance a
        JOIN members m ON m.id = a.member_id
-       LEFT JOIN member_groups g ON g.id = m.group_id
        LEFT JOIN users ru ON ru.id = a.recorded_by_user_id
        LEFT JOIN users uu ON uu.id = a.updated_by_user_id
       WHERE a.service_id = $1

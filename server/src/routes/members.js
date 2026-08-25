@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
-const { vStr, vEmail, vInt, vEnum } = require('../utils/validate');
+const { vStr, vEmail, vInt, vEnum, vDate } = require('../utils/validate');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
@@ -9,13 +9,15 @@ const router = express.Router();
 router.use(authenticate, requireAdmin);
 
 function cleanMember(m) {
+  const groups = m.groups || [];
   return {
     id: m.id,
     full_name: m.full_name,
     email: m.email,
     phone: m.phone,
-    group_id: m.group_id,
-    group_name: m.group_name || null,
+    birthday: m.birthday || null,
+    groups,
+    group_ids: groups.map((g) => g.id),
     status: m.status,
     last_attended: m.last_attended,
     consecutive_absences: m.consecutive_absences,
@@ -27,24 +29,46 @@ function cleanMember(m) {
 
 async function findMember(id) {
   const { rows } = await db.query(
-    `SELECT m.*, g.name AS group_name
+    `SELECT m.*, COALESCE((
+         SELECT json_agg(json_build_object('id', g.id, 'name', g.name) ORDER BY g.name)
+           FROM member_group_assignments mga
+           JOIN member_groups g ON g.id = mga.group_id
+          WHERE mga.member_id = m.id
+       ), '[]'::json) AS groups
        FROM members m
-       LEFT JOIN member_groups g ON g.id = m.group_id
       WHERE m.id = $1`,
     [id]
   );
   return rows[0];
 }
 
-async function checkGroup(groupId) {
-  if (groupId == null) return null;
-  const { rows } = await db.query('SELECT id FROM member_groups WHERE id = $1', [groupId]);
-  if (!rows.length) {
-    throw new ApiError(400, 'The selected group does not exist.', [
-      { field: 'groupId', message: 'Unknown group.' },
+function readGroupIds(body) {
+  const raw = body ? body.groupIds : undefined;
+  if (raw === undefined || raw === null) return [];
+  const arr = Array.isArray(raw) ? raw : [raw];
+  return arr.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0);
+}
+
+async function ensureGroups(groupIds) {
+  const ids = [...new Set(groupIds)];
+  if (!ids.length) return ids;
+  const { rows } = await db.query('SELECT id FROM member_groups WHERE id = ANY($1)', [ids]);
+  if (rows.length !== ids.length) {
+    throw new ApiError(400, 'One or more selected groups do not exist.', [
+      { field: 'groupIds', message: 'Unknown group.' },
     ]);
   }
-  return groupId;
+  return ids;
+}
+
+async function setMemberGroups(memberId, groupIds) {
+  await db.query('DELETE FROM member_group_assignments WHERE member_id = $1', [memberId]);
+  for (const gid of groupIds) {
+    await db.query(
+      'INSERT INTO member_group_assignments (member_id, group_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [memberId, gid]
+    );
+  }
 }
 
 router.get('/', asyncHandler(async (req, res) => {
@@ -67,14 +91,18 @@ router.get('/', asyncHandler(async (req, res) => {
   }
   if (groupId) {
     params.push(groupId);
-    where.push(`m.group_id = $${params.length}`);
+    where.push(`EXISTS (SELECT 1 FROM member_group_assignments mga WHERE mga.member_id = m.id AND mga.group_id = $${params.length})`);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
   const { rows } = await db.query(
-    `SELECT m.*, g.name AS group_name
+    `SELECT m.*, COALESCE((
+         SELECT json_agg(json_build_object('id', g.id, 'name', g.name) ORDER BY g.name)
+           FROM member_group_assignments mga
+           JOIN member_groups g ON g.id = mga.group_id
+          WHERE mga.member_id = m.id
+       ), '[]'::json) AS groups
        FROM members m
-       LEFT JOIN member_groups g ON g.id = m.group_id
        ${whereSql}
       ORDER BY m.full_name ASC
       LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
@@ -90,17 +118,19 @@ router.post('/', asyncHandler(async (req, res) => {
   const fullName = vStr(req.body, 'fullName', { required: true, max: 120, label: 'Full name' });
   const email = vEmail(req.body, 'email');
   const phone = vStr(req.body, 'phone', { max: 40 });
-  const groupId = await checkGroup(vInt(req.body, 'groupId'));
+  const birthday = vDate(req.body, 'birthday');
+  const groupIds = await ensureGroups(readGroupIds(req.body));
   const status = vEnum(req.body, 'status', ['active', 'inactive']) || 'active';
   const notes = vStr(req.body, 'notes', { max: 1000 });
 
   try {
     const { rows } = await db.query(
-      `INSERT INTO members (full_name, email, phone, group_id, status, notes)
+      `INSERT INTO members (full_name, email, phone, birthday, status, notes)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
-      [fullName, email, phone, groupId, status, notes]
+      [fullName, email, phone, birthday, status, notes]
     );
+    await setMemberGroups(rows[0].id, groupIds);
     res.status(201).json({ member: cleanMember(await findMember(rows[0].id)) });
   } catch (e) {
     if (e.code === '23505') throw new ApiError(409, 'A member with this email already exists.');
@@ -122,17 +152,19 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const fullName = vStr(req.body, 'fullName', { required: true, max: 120, label: 'Full name' });
   const email = vEmail(req.body, 'email');
   const phone = vStr(req.body, 'phone', { max: 40 });
-  const groupId = await checkGroup(vInt(req.body, 'groupId'));
+  const birthday = vDate(req.body, 'birthday');
+  const groupIds = await ensureGroups(readGroupIds(req.body));
   const status = vEnum(req.body, 'status', ['active', 'inactive']) || existing.status;
   const notes = vStr(req.body, 'notes', { max: 1000 });
 
   try {
     await db.query(
       `UPDATE members
-          SET full_name = $1, email = $2, phone = $3, group_id = $4, status = $5, notes = $6
+          SET full_name = $1, email = $2, phone = $3, birthday = $4, status = $5, notes = $6
         WHERE id = $7`,
-      [fullName, email, phone, groupId, status, notes, id]
+      [fullName, email, phone, birthday, status, notes, id]
     );
+    await setMemberGroups(id, groupIds);
     res.json({ member: cleanMember(await findMember(id)) });
   } catch (e) {
     if (e.code === '23505') throw new ApiError(409, 'Another member already uses this email.');

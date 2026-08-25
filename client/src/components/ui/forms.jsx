@@ -1,4 +1,5 @@
-import { cloneElement, isValidElement } from 'react';
+import { cloneElement, isValidElement, useState } from 'react';
+import { IconEye, IconEyeOff } from './icons.jsx';
 
 /** Accessible form field wrapper: wires label, hint and error to the control. */
 export function Field({ label, id, error, hint, required, children, className = '' }) {
@@ -65,5 +66,27 @@ export function Checkbox({ label, id, className = '', ...rest }) {
       <input id={id} type="checkbox" {...rest} />
       <span>{label}</span>
     </label>
+  );
+}
+
+/**
+ * Password field with a show/hide toggle. Toggling only swaps the input's
+ * `type` attribute on the same DOM node, so focus and the caret stay put.
+ */
+export function PasswordInput({ id, className = '', ...rest }) {
+  const [reveal, setReveal] = useState(false);
+  return (
+    <div className="password-wrap">
+      <input id={id} className="input" type={reveal ? 'text' : 'password'} {...rest} />
+      <button
+        type="button"
+        className="password-toggle"
+        onClick={() => setReveal((v) => !v)}
+        aria-label={reveal ? 'Hide password' : 'Show password'}
+        aria-pressed={reveal}
+      >
+        {reveal ? <IconEyeOff size={18} /> : <IconEye size={18} />}
+      </button>
+    </div>
   );
 }

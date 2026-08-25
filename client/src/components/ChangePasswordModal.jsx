@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { Modal } from './ui/Modal.jsx';
 import { Alert } from './ui/feedback.jsx';
-import { Button, Field, Input } from './ui/forms.jsx';
+import { Button, Field, PasswordInput } from './ui/forms.jsx';
 
 export default function ChangePasswordModal({ open, onClose }) {
   const { setUser } = useAuth();
@@ -52,13 +52,13 @@ export default function ChangePasswordModal({ open, onClose }) {
       <form onSubmit={submit} noValidate>
         {error && <Alert variant="error">{error}</Alert>}
         <Field label="Current password" id="cp-current" required>
-          <Input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
+          <PasswordInput autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
         </Field>
         <Field label="New password" id="cp-new" required hint="At least 8 characters.">
-          <Input type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} required minLength={8} />
+          <PasswordInput autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} required minLength={8} />
         </Field>
         <Field label="Confirm new password" id="cp-confirm" required>
-          <Input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+          <PasswordInput autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
         </Field>
         <div className="modal-actions">
           <Button variant="secondary" type="button" onClick={() => { reset(); onClose(); }}>Cancel</Button>

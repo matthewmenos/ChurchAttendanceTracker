@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../config/db');
-const { asyncHandler } = require('../utils/errors');
+const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vBool } = require('../utils/validate');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { getSettingsMap, PUBLIC_KEYS } = require('../services/settings');
@@ -35,6 +35,16 @@ router.put('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   }
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'show_member_contacts_to_ushers')) {
     updates.push(['show_member_contacts_to_ushers', String(vBool(req.body, 'show_member_contacts_to_ushers', { required: true }))]);
+  }
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'birthday_messages_enabled')) {
+    updates.push(['birthday_messages_enabled', String(vBool(req.body, 'birthday_messages_enabled', { required: true }))]);
+  }
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'birthday_message_template')) {
+    const tpl = vStr(req.body, 'birthday_message_template', { required: true, min: 2, max: 500, label: 'Birthday message template' });
+    if (tpl && !/\{\{\s*first_name\s*\}\}/.test(tpl)) {
+      throw new ApiError(400, 'The birthday template must include {{first_name}}.');
+    }
+    updates.push(['birthday_message_template', tpl]);
   }
 
   for (const [key, value] of updates) {

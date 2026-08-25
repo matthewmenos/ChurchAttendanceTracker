@@ -31,6 +31,16 @@ const config = {
     usherEmail: process.env.SEED_USHER_EMAIL || '',
     usherPassword: process.env.SEED_USHER_PASSWORD || '',
   },
+  // Arkasel SMS gateway — delivers member birthday messages.
+  // Leave ARKASEL_ENDPOINT/ARKASEL_API_KEY empty to run birthday sends in
+  // dry-run mode (messages are computed and logged, never delivered).
+  arkasel: {
+    endpoint: process.env.ARKASEL_ENDPOINT || '',
+    apiKey: process.env.ARKASEL_API_KEY || '',
+    senderId: process.env.ARKASEL_SENDER_ID || '',
+    authHeader: process.env.ARKASEL_AUTH_HEADER || 'Authorization',
+    authScheme: process.env.ARKASEL_AUTH_SCHEME !== undefined ? process.env.ARKASEL_AUTH_SCHEME : 'Bearer ',
+  },
 };
 
 if (config.isProd && (!config.jwtAccessSecret || !config.jwtRefreshSecret)) {

@@ -9,7 +9,7 @@ const app = createApp();
 
 async function resetTables() {
   await db.query(
-    'TRUNCATE attendance, follow_ups, refresh_tokens, services, members, member_groups, locations, users RESTART IDENTITY CASCADE'
+    'TRUNCATE attendance, follow_ups, refresh_tokens, services, members, member_groups, locations, users, member_group_assignments, birthday_messages RESTART IDENTITY CASCADE'
   );
 }
 
@@ -40,13 +40,19 @@ async function seedBase() {
   const usher = await createUser({ name: 'Usher One', email: 'usher@test.app', role: 'usher' });
   const g = await db.query("INSERT INTO member_groups (name) VALUES ('Choir') RETURNING *");
   const m = await db.query(
-    `INSERT INTO members (full_name, email, group_id) VALUES
-       ('Alice Johnson', 'alice@test.app', $1),
-       ('Brian Smith', NULL, $1),
-       ('Cynthia Lee', NULL, NULL)
+    `INSERT INTO members (full_name, email) VALUES
+       ('Alice Johnson', 'alice@test.app'),
+       ('Brian Smith', NULL),
+       ('Cynthia Lee', NULL)
      RETURNING *`,
-    [g.rows[0].id]
   );
+  // Alice and Brian belong to the Choir (multi-group supported).
+  for (const row of m.rows.slice(0, 2)) {
+    await db.query(
+      'INSERT INTO member_group_assignments (member_id, group_id) VALUES ($1, $2)',
+      [row.id, g.rows[0].id]
+    );
+  }
   const today = new Date();
   const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const s = await db.query(

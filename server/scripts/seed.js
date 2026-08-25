@@ -38,7 +38,7 @@ async function main() {
   // Wipe previous demo data so the seed can be re-run safely.
   // (settings are kept — admins may have customised them)
   await db.query(
-    'TRUNCATE attendance, follow_ups, refresh_tokens, services, members, member_groups, locations, users RESTART IDENTITY CASCADE'
+    'TRUNCATE attendance, follow_ups, refresh_tokens, services, members, member_groups, locations, users, member_group_assignments, birthday_messages RESTART IDENTITY CASCADE'
   );
 
   // ---------- users ----------
@@ -124,19 +124,49 @@ async function main() {
 
   const memberIds = [];
   let phoneSeq = 101;
+  const today = new Date();
   for (const [fullName, groupName, hasEmail] of memberDefs) {
     const slug = fullName.toLowerCase().replace(/[^a-z ]/g, '').split(/ +/).join('.');
     const { rows } = await db.query(
-      `INSERT INTO members (full_name, email, phone, group_id)
-       VALUES ($1, $2, $3, $4) RETURNING id`,
+      `INSERT INTO members (full_name, email, phone)
+       VALUES ($1, $2, $3) RETURNING id`,
       [
         fullName,
         hasEmail ? `${slug}@example.com` : null,
         `+1 555-01${phoneSeq++}`,
-        groupName ? groups[groupName] : null,
       ]
     );
-    memberIds.push(rows[0].id);
+    const memberId = rows[0].id;
+    memberIds.push(memberId);
+    if (groupName) {
+      await db.query(
+        'INSERT INTO member_group_assignments (member_id, group_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [memberId, groups[groupName]]
+      );
+    }
+  }
+
+  // Demonstrate multi-group membership on a few members.
+  const extraAssignments = [
+    [memberIds[0], groups["Women's Fellowship"]],
+    [memberIds[4], groups['Choir']],
+    [memberIds[9], groups["Men's Fellowship"]],
+  ];
+  for (const [memberId, groupId] of extraAssignments) {
+    await db.query(
+      'INSERT INTO member_group_assignments (member_id, group_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [memberId, groupId]
+    );
+  }
+
+  // Give a few members a birthday (a couple on today) so the greeting
+  // preview can be demonstrated right after seeding.
+  for (let i = 0; i < memberIds.length; i += 6) {
+    const bd = new Date(today);
+    bd.setFullYear(today.getFullYear() - 25 - (i % 20));
+    bd.setMonth(today.getMonth());
+    bd.setDate(today.getDate() + (i % 3)); // today, +1, +2
+    await db.query('UPDATE members SET birthday = $1 WHERE id = $2', [fmtDate(bd), memberIds[i]]);
   }
 
   // Make three specific members inactive.

@@ -51,16 +51,19 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
 
   const { rows } = await db.query(
     `SELECT m.id AS member_id, m.full_name, m.phone, m.email, m.status AS member_status,
-            g.name AS group_name,
+            COALESCE((
+              SELECT string_agg(g.name, ', ' ORDER BY g.name)
+                FROM member_group_assignments mga JOIN member_groups g ON g.id = mga.group_id
+               WHERE mga.member_id = m.id
+            ), '') AS group_name,
             a.id AS attendance_id, a.status, a.notes, a.recorded_at, a.updated_at,
             COALESCE(uu.name, ru.name) AS recorded_by_name
        FROM members m
-       LEFT JOIN member_groups g ON g.id = m.group_id
        LEFT JOIN attendance a ON a.member_id = m.id AND a.service_id = $1
        LEFT JOIN users ru ON ru.id = a.recorded_by_user_id
        LEFT JOIN users uu ON uu.id = a.updated_by_user_id
       WHERE ($2 = '' OR m.full_name ILIKE '%' || $2 || '%')
-        AND ($3::int IS NULL OR m.group_id = $3)
+        AND ($3::int IS NULL OR EXISTS (SELECT 1 FROM member_group_assignments mga WHERE mga.member_id = m.id AND mga.group_id = $3))
         AND ($4 = 'all' OR m.status = $4)
       ORDER BY m.full_name ASC`,
     [serviceId, search, groupId, memberStatus]
@@ -191,13 +194,17 @@ router.get('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const { rows } = await db.query(
     `SELECT a.id, a.status, a.notes, a.recorded_at, a.updated_at,
             a.member_id, a.service_id,
-            m.full_name AS member_name, g.name AS group_name,
+            m.full_name AS member_name,
+            COALESCE((
+              SELECT string_agg(g.name, ', ' ORDER BY g.name)
+                FROM member_group_assignments mga JOIN member_groups g ON g.id = mga.group_id
+               WHERE mga.member_id = m.id
+            ), '') AS group_name,
             s.service_date, s.service_name,
             ru.name AS recorded_by_name, uu.name AS updated_by_name
        FROM attendance a
        JOIN members m ON m.id = a.member_id
        JOIN services s ON s.id = a.service_id
-       LEFT JOIN member_groups g ON g.id = m.group_id
        LEFT JOIN users ru ON ru.id = a.recorded_by_user_id
        LEFT JOIN users uu ON uu.id = a.updated_by_user_id
        ${whereSql}

@@ -63,10 +63,14 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
 
   const { rows: highPriority } = await db.query(
     `SELECT f.id, f.member_id, f.absent_weeks, f.reason, f.priority, f.assigned_to,
-            m.full_name AS member_name, g.name AS group_name
+            m.full_name AS member_name,
+            COALESCE((
+              SELECT string_agg(g.name, ', ' ORDER BY g.name)
+                FROM member_group_assignments mga JOIN member_groups g ON g.id = mga.group_id
+               WHERE mga.member_id = m.id
+            ), '') AS group_name
        FROM follow_ups f
        JOIN members m ON m.id = f.member_id
-       LEFT JOIN member_groups g ON g.id = m.group_id
       WHERE f.status = 'open' AND f.priority = 'high'
       ORDER BY f.absent_weeks DESC
       LIMIT 5`
@@ -157,7 +161,8 @@ router.get('/summary', asyncHandler(async (req, res) => {
            COUNT(a.id) FILTER (WHERE a.status = 'absent'  AND s.id IS NOT NULL) AS absent_count,
            COUNT(a.id) FILTER (WHERE a.status = 'excused' AND s.id IS NOT NULL) AS excused_count
       FROM member_groups g
-      LEFT JOIN members m ON m.group_id = g.id
+      LEFT JOIN member_group_assignments mga ON mga.group_id = g.id
+      LEFT JOIN members m ON m.id = mga.member_id
       LEFT JOIN attendance a ON a.member_id = m.id
       LEFT JOIN services s ON s.id = a.service_id AND s.service_date BETWEEN $1 AND $2
      GROUP BY g.id, g.name`;
@@ -172,7 +177,7 @@ router.get('/summary', asyncHandler(async (req, res) => {
       FROM members m
       LEFT JOIN attendance a ON a.member_id = m.id
       LEFT JOIN services s ON s.id = a.service_id AND s.service_date BETWEEN $1 AND $2
-     WHERE m.group_id IS NULL`;
+     WHERE NOT EXISTS (SELECT 1 FROM member_group_assignments mga WHERE mga.member_id = m.id)`;
 
   const { rows: g1 } = await db.query({ text: groupQuery, values: [from, to] });
   const { rows: g2 } = await db.query({ text: noGroupQuery, values: [from, to] });
@@ -189,13 +194,17 @@ router.get('/summary', asyncHandler(async (req, res) => {
 
   const { rows: repeatAbsentees } = await db.query({ text: `
      SELECT t.* FROM (
-        SELECT m.id, m.full_name, g.name AS group_name, m.consecutive_absences, m.last_attended,
+        SELECT m.id, m.full_name, gg.group_name, m.consecutive_absences, m.last_attended,
                (SELECT COUNT(*) FROM attendance a
                   JOIN services s ON s.id = a.service_id
                  WHERE a.member_id = m.id AND a.status = 'absent'
                    AND s.service_date BETWEEN $1 AND $2) AS absences_in_range
          FROM members m
-         LEFT JOIN member_groups g ON g.id = m.group_id
+         LEFT JOIN LATERAL (
+              SELECT string_agg(g.name, ', ' ORDER BY g.name) AS group_name
+                FROM member_group_assignments mga JOIN member_groups g ON g.id = mga.group_id
+               WHERE mga.member_id = m.id
+         ) gg ON true
         WHERE m.status = 'active'
      ) t
       WHERE t.consecutive_absences >= 3 OR t.absences_in_range >= 4

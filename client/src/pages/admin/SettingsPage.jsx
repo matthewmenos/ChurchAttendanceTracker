@@ -8,6 +8,75 @@ import { Button, Checkbox, Field, Input, Select, Textarea } from '../../componen
 import { ConfirmDialog, Modal } from '../../components/ui/Modal.jsx';
 import { IconTag } from '../../components/ui/icons.jsx';
 
+function BirthdayTab() {
+  const toast = useToast();
+  const previewQ = useFetch(() => api('/birthdays/today'), []);
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const run = async (force) => {
+    setRunning(true);
+    setResult(null);
+    try {
+      const data = await api('/birthdays/run', { method: 'POST', body: { force } });
+      setResult(data);
+      toast(force ? 'Birthday run (force) complete.' : 'Birthday run complete.');
+      await previewQ.reload();
+    } catch (err) {
+      toast(err.message || 'Birthday run failed.');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const p = previewQ.data || { enabled: true, members: [], date: '' };
+  return (
+    <div className='card pad'>
+      <h2 className='card-title'>Today's birthdays</h2>
+      <p className='muted'>Preview for {p.date || 'today'}. Arkasel is {p.providerConfigured ? 'configured' : 'not configured (dry-run)'}.</p>
+      {previewQ.loading && <LoadingBlock />}
+      {previewQ.error && <ErrorState error={previewQ.error} onRetry={previewQ.reload} />}
+      {!previewQ.loading && !previewQ.error && (
+        <>
+          {p.members.length === 0 ? (
+            <EmptyState
+              icon={null}
+              title='No birthdays today'
+              message='Add a birthday date to a member (Members → edit) to see a preview here.'
+            />
+          ) : (
+            <ul className='birthday-list'>
+              {p.members.map((m) => (
+                <li key={m.id} className='birthday-item'>
+                  <div>
+                    <strong>{m.full_name}</strong>
+                    {m.status ? <Badge variant='neutral'>{m.status}</Badge> : null}
+                    <span className='muted small block'>{m.phone || 'No phone'} · {m.age ?? '?'} years</span>
+                  </div>
+                  <div className='muted small'>{m.message}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className='modal-actions' style={{ marginTop: 12 }}>
+            <Button variant='secondary' loading={running} onClick={() => run(false)} disabled={p.members.length === 0}>
+              Run now
+            </Button>
+            <Button variant='ghost' loading={running} onClick={() => run(true)} disabled={p.members.length === 0}>
+              Run again (force)
+            </Button>
+          </div>
+          {result && (
+            <p className='muted small'>
+              Sent {result.sent} · failed {result.failed} · {result.results.map((r) => r.status).join(', ')}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function SettingsForm({ initial, fields, endpoint }) {
   const toast = useToast();
   const [values, setValues] = useState(initial || {});
@@ -196,6 +265,10 @@ export default function SettingsPage() {
     usher_correction_window_minutes: Number(s.usher_correction_window_minutes || 30),
     show_member_contacts_to_ushers: s.show_member_contacts_to_ushers === 'true',
   };
+  const birthdayInitial = {
+    birthday_messages_enabled: s.birthday_messages_enabled !== 'false',
+    birthday_message_template: s.birthday_message_template || '',
+  };
 
   return (
     <div className='container'>
@@ -207,6 +280,7 @@ export default function SettingsPage() {
         tabs={[
           { key: 'general', label: 'General' },
           { key: 'permissions', label: 'Usher permissions' },
+          { key: 'birthdays', label: 'Birthdays' },
           { key: 'groups', label: 'Groups' },
           { key: 'locations', label: 'Locations' },
         ]}
@@ -230,6 +304,20 @@ export default function SettingsPage() {
             { key: 'show_member_contacts_to_ushers', type: 'checkbox', label: 'Show member contact details to ushers', hint: 'Off by default — ushers see names and groups only.' },
           ]}
         />
+      )}
+
+      {tab === 'birthdays' && (
+        <>
+          <SettingsForm
+            initial={birthdayInitial}
+            endpoint='/settings'
+            fields={[
+              { key: 'birthday_messages_enabled', type: 'checkbox', label: 'Send birthday messages', hint: 'Members with a birthday today receive an SMS via Arkasel.' },
+              { key: 'birthday_message_template', label: 'Message template', hint: 'Use {{first_name}}, {{full_name}}, {{age}}, {{church_name}}. Must include {{first_name}}.', maxLength: 500 },
+            ]}
+          />
+          <BirthdayTab />
+        </>
       )}
 
       {tab === 'groups' && (

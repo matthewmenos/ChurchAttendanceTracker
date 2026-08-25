@@ -9,7 +9,7 @@ const router = express.Router();
 // Reading groups is needed by ushers for the roster filter.
 router.get('/', authenticate, asyncHandler(async (req, res) => {
   const { rows } = await db.query(
-    `SELECT g.*, (SELECT COUNT(*) FROM members m WHERE m.group_id = g.id) AS member_count
+    `SELECT g.*, (SELECT COUNT(*) FROM member_group_assignments mga WHERE mga.group_id = g.id) AS member_count
        FROM member_groups g ORDER BY g.name ASC`
   );
   res.json({ items: rows.map((g) => ({ ...g, member_count: Number(g.member_count) })) });
