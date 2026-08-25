@@ -25,9 +25,12 @@ router.get('/health', async (req, res) => {
 router.get('/branding', async (req, res) => {
   try {
     const s = await getSettingsMap(db);
-    res.json({ churchName: s.church_name || 'COP Agona Ahanta' });
+    res.json({
+      churchName: s.church_name || 'COP Agona Ahanta',
+      logo: s.logo || '',
+    });
   } catch (e) {
-    res.json({ churchName: 'COP Agona Ahanta' });
+    res.json({ churchName: 'COP Agona Ahanta', logo: '' });
   }
 });
 router.use('/auth', require('./auth'));

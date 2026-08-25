@@ -57,7 +57,8 @@ function clearAuthCookies(res) {
 async function loadPublicUser(id) {
   const { rows } = await db.query(
     `SELECT u.id, u.name, u.email, u.username, u.role, u.status, u.must_change_password, u.last_login_at,
-            (SELECT value FROM settings WHERE key = 'church_name') AS church_name
+            (SELECT value FROM settings WHERE key = 'church_name') AS church_name,
+            (SELECT value FROM settings WHERE key = 'logo') AS logo
        FROM users u
       WHERE u.id = $1`,
     [id]
@@ -74,6 +75,7 @@ async function loadPublicUser(id) {
     must_change_password: u.must_change_password,
     last_login_at: u.last_login_at,
     churchName: u.church_name || 'Church Attendance Tracker',
+    logo: u.logo || '',
   };
 }
 

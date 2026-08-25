@@ -8,7 +8,92 @@ import { Button, Checkbox, Field, Input, Select, Textarea } from '../../componen
 import { ConfirmDialog, Modal } from '../../components/ui/Modal.jsx';
 import { Table } from '../../components/ui/Table.jsx';
 import { formatShortDate, formatTime, timeAgo } from '../../utils/format.js';
-import { IconTag, IconClipboardList } from '../../components/ui/icons.jsx';
+import { IconTag, IconClipboardList, IconUpload } from '../../components/ui/icons.jsx';
+
+function GeneralTab({ generalInitial }) {
+  const toast = useToast();
+  const [values, setValues] = useState({ church_name: '', logo: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [preview, setPreview] = useState('');
+
+  useEffect(() => {
+    setValues({ church_name: generalInitial.church_name || '', logo: generalInitial.logo || '' });
+    setPreview(generalInitial.logo || '');
+  }, [generalInitial]);
+
+  const set = (key, value) => setValues((v) => ({ ...v, [key]: value }));
+
+  const handleFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.match(/^image\/(png|jpeg|jpg|gif|svg\+xml)$/)) {
+      toast('Please upload a PNG, JPG, or SVG file.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast('Logo must be at most 2 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUri = reader.result;
+      setPreview(dataUri);
+      set('logo', dataUri);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeLogo = () => {
+    setPreview('');
+    set('logo', '');
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await api('/settings', { method: 'PUT', body: values });
+      toast('Settings saved.');
+      window.dispatchEvent(new Event('cat:logo-updated'));
+    } catch (err) {
+      setError(err.message || 'Could not save settings.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} noValidate className='card pad'>
+      {error && <Alert variant='error'>{error}</Alert>}
+      <Field label='Church name' id='church_name' hint='Shown in the sidebar and on sign-in.' maxLength={80}>
+        <Input id='church_name' value={values.church_name} maxLength={80} onChange={(e) => set('church_name', e.target.value)} />
+      </Field>
+      <Field label='Church logo' id='logo' hint='PNG, JPG, or SVG — max 2 MB. Replaces the church icon in the sidebar and on sign-in.'>
+        <div className='logo-upload-area'>
+          {preview ? (
+            <div className='logo-preview'>
+              <img src={preview} alt='Logo preview' className='logo-preview-img' />
+              <button type='button' className='btn btn-ghost btn-sm' onClick={removeLogo}>Remove</button>
+            </div>
+          ) : (
+            <label className='logo-dropzone'>
+              <input type='file' accept='image/png,image/jpeg,image/jpg,image/svg+xml' onChange={handleFile} style={{ display: 'none' }} />
+              <IconUpload size={24} />
+              <span>Choose a logo…</span>
+            </label>
+          )}
+        </div>
+      </Field>
+      <div className='modal-actions'>
+        <Button type='submit' loading={saving}>Save settings</Button>
+      </div>
+    </form>
+  );
+}
+
+
 
 function BirthdayTab() {
   const toast = useToast();
@@ -536,7 +621,7 @@ export default function SettingsPage() {
   if (settingsQ.error) return <div className='container'><ErrorState error={settingsQ.error} onRetry={settingsQ.reload} /></div>;
 
   const s = (settingsQ.data && settingsQ.data.settings) || {};
-  const generalInitial = { church_name: s.church_name || '' };
+    const generalInitial = { church_name: s.church_name || '', logo: s.logo || '' };
   const permsInitial = {
     usher_can_correct_attendance: s.usher_can_correct_attendance === 'true',
     usher_correction_window_minutes: Number(s.usher_correction_window_minutes || 30),
@@ -570,11 +655,7 @@ export default function SettingsPage() {
       />
 
       {tab === 'general' && (
-        <SettingsForm
-          initial={generalInitial}
-          endpoint='/settings'
-          fields={[{ key: 'church_name', label: 'Church name', hint: 'Shown in the sidebar and on sign-in.', maxLength: 80 }]}
-        />
+        <GeneralTab generalInitial={generalInitial} />
       )}
 
       {tab === 'permissions' && (

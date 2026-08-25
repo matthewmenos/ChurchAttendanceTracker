@@ -4,7 +4,8 @@ import { useAuth } from '../../auth/AuthContext.jsx';
 import { Avatar } from '../ui/display.jsx';
 import { Alert } from '../ui/feedback.jsx';
 import ChangePasswordModal from '../ChangePasswordModal.jsx';
-import { IconChurch, IconKey, IconCalendar, IconUsers, IconClipboardCheck } from '../ui/icons.jsx';
+import Logo from '../ui/Logo.jsx';
+import { IconKey, IconCalendar, IconUsers, IconClipboardCheck } from '../ui/icons.jsx';
 
 export default function UsherLayout() {
   const { user, logout } = useAuth();
@@ -20,7 +21,7 @@ export default function UsherLayout() {
     <div className='usher-shell'>
       <header className='usher-topbar'>
         <div className='usher-brand'>
-          <span className='brand-mark' aria-hidden='true'><IconChurch size={22} /></span>
+          <Logo size={22} />
           <span>{(user && user.churchName) || 'Attendance'}</span>
         </div>
         <div className='usher-user'>

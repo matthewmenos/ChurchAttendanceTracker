@@ -15,12 +15,14 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [churchName, setChurchName] = useState('');
+  const [logo, setLogo] = useState('');
 
   useEffect(() => {
     document.title = 'Sign in — COP Agona Ahanta';
     api('/branding')
       .then((data) => {
         if (data && data.churchName) setChurchName(data.churchName);
+        if (data && data.logo) setLogo(data.logo);
       })
       .catch(() => {
         // branding endpoint unreachable — heading falls back below
@@ -54,7 +56,7 @@ export default function LoginPage() {
     <div className='login-page'>
       <div className='login-card card'>
         <div className='login-brand'>
-          <span className='brand-mark big' aria-hidden='true'><IconChurch size={28} /></span>
+          {logo ? <img src={logo} alt='' className='login-logo big' aria-hidden='true' /> : <span className='brand-mark big' aria-hidden='true'><IconChurch size={28} /></span>}
           <h1>{churchName || 'COP Agona Ahanta'}</h1>
           <p className='muted'>Attendance Tracker · Sign in to continue</p>
         </div>

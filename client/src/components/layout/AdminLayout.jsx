@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext.jsx';
 import { Avatar, Badge } from '../ui/display.jsx';
 import { Alert } from '../ui/feedback.jsx';
 import { Button } from '../ui/forms.jsx';
+import Logo from '../ui/Logo.jsx';
 import ChangePasswordModal from '../ChangePasswordModal.jsx';
 import {
   IconChart,
@@ -13,7 +14,6 @@ import {
   IconTrendingUp,
   IconShield,
   IconSettings,
-  IconChurch,
   IconMenu,
 } from '../ui/icons.jsx';
 
@@ -67,7 +67,7 @@ export default function AdminLayout() {
       <a className='skip-link' href='#main-content'>Skip to content</a>
       <aside className={'sidebar' + (navOpen ? ' open' : '')}>
         <div className='sidebar-brand'>
-          <span className='brand-mark' aria-hidden='true'><IconChurch size={22} /></span>
+          <Logo size={22} />
           <span className='brand-text'>{(user && user.churchName) || 'Church Attendance'}</span>
         </div>
         {nav}

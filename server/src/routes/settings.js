@@ -3,7 +3,7 @@ const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vBool } = require('../utils/validate');
 const { authenticate, requireAdmin } = require('../middleware/auth');
-const { getSettingsMap, PUBLIC_KEYS } = require('../services/settings');
+const { getSettingsMap, PUBLIC_KEYS, validateLogo } = require('../services/settings');
 
 const router = express.Router();
 
@@ -61,6 +61,14 @@ router.put('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   }
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'followup_absent_threshold')) {
     updates.push(['followup_absent_threshold', String(vInt(req.body, 'followup_absent_threshold', { required: true, min: 0, max: 52, label: 'Follow-up absence threshold' }))]);
+  }
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'logo')) {
+    const logo = req.body.logo;
+    if (logo === '' || logo === null) {
+      updates.push(['logo', '']);
+    } else {
+      updates.push(['logo', validateLogo(logo)]);
+    }
   }
 
   for (const [key, value] of updates) {
