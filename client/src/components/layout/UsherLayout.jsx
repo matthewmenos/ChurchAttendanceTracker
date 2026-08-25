@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { Avatar } from '../ui/display.jsx';
 import { Alert } from '../ui/feedback.jsx';
 import ChangePasswordModal from '../ChangePasswordModal.jsx';
-import { IconChurch, IconKey } from '../ui/icons.jsx';
+import { IconChurch, IconKey, IconCalendar, IconUsers, IconClipboardCheck } from '../ui/icons.jsx';
 
 export default function UsherLayout() {
   const { user, logout } = useAuth();
@@ -32,6 +32,18 @@ export default function UsherLayout() {
           <button type='button' className='btn btn-outline-light btn-sm' onClick={handleLogout}>Sign out</button>
         </div>
       </header>
+
+      <nav className='tabs usher-nav' aria-label='Usher sections'>
+        <NavLink end to='/usher' className={({ isActive }) => 'tab' + (isActive ? ' active' : '')}>
+          <IconCalendar size={16} /> Home
+        </NavLink>
+        <NavLink to='/usher/visitors' className={({ isActive }) => 'tab' + (isActive ? ' active' : '')}>
+          <IconUsers size={16} /> Visitors
+        </NavLink>
+        <NavLink to='/usher/marks' className={({ isActive }) => 'tab' + (isActive ? ' active' : '')}>
+          <IconClipboardCheck size={16} /> My marks
+        </NavLink>
+      </nav>
 
       {(user && user.must_change_password) && (
         <div className='container usher-banner'>

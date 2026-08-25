@@ -114,6 +114,42 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
   });
 }));
 
+/** Recent records submitted by the signed-in user — powers the usher "My marks" screen. */
+router.get('/mine', authenticate, asyncHandler(async (req, res) => {
+  const settings = await getSettingsMap(db);
+  const canCorrectSetting = settings.usher_can_correct_attendance === 'true';
+  const windowMin = Number(settings.usher_correction_window_minutes || 30);
+  const cutoff = Date.now() - windowMin * 60 * 1000;
+  const { rows } = await db.query({
+    text: `SELECT a.id, a.status, a.recorded_at, a.updated_at,
+                  m.id AS member_id, m.full_name AS member_name,
+                  s.id AS service_id, s.service_name, s.service_date,
+                  (s.attendance_closed OR (s.attendance_close_time IS NOT NULL AND s.attendance_close_time <= now())) AS marking_locked
+             FROM attendance a
+             JOIN members m ON m.id = a.member_id
+             JOIN services s ON s.id = a.service_id
+            WHERE a.recorded_by_user_id = $1
+            ORDER BY s.service_date DESC, a.id DESC
+            LIMIT 50`,
+    values: [req.user.id],
+  });
+  const items = rows.map((r) => ({
+    ...r,
+    marking_locked: !!r.marking_locked,
+    can_correct:
+      req.user.role === 'admin' ||
+      (canCorrectSetting && !r.marking_locked && new Date(r.recorded_at).getTime() >= cutoff),
+  }));
+  res.json({
+    items,
+    correction: {
+      allowed: req.user.role === 'admin' || canCorrectSetting,
+      selfOnly: req.user.role !== 'admin',
+      windowMinutes: windowMin,
+    },
+  });
+}));
+
 /** Mark one member for one service. Upsert => never duplicates. */
 router.post('/', authenticate, asyncHandler(async (req, res) => {
   const serviceId = vInt(req.body, 'serviceId', { required: true, label: 'Service' });

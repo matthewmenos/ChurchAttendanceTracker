@@ -464,6 +464,10 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
 .member-hero-main { flex: 1; min-width: 220px; }
 .member-notes { background: var(--yellow-50); border: 1px solid var(--yellow-100); border-radius: 8px; padding: 8px 12px; font-size: .9rem; }
 .member-hero-actions { display: grid; gap: 8px; }
+/* ---------------- usher nav ---------------- */
+.usher-nav { background: #fff; padding: 0 18px; margin-bottom: 6px; }
+.usher-nav a { text-decoration: none; display: inline-flex; align-items: center; gap: 7px; }
+
 /* ---------------- responsive ---------------- */
 @media (max-width: 1024px) {
   .stat-grid, .stat-grid-4 { grid-template-columns: repeat(2, 1fr); }

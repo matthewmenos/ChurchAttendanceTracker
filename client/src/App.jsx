@@ -17,6 +17,8 @@ import SettingsPage from './pages/admin/SettingsPage.jsx';
 import VisitorsPage from './pages/admin/VisitorsPage.jsx';
 import UsherHomePage from './pages/usher/UsherHomePage.jsx';
 import UsherMarkPage from './pages/usher/UsherMarkPage.jsx';
+import UsherVisitorsPage from './pages/usher/UsherVisitorsPage.jsx';
+import UsherMarksPage from './pages/usher/UsherMarksPage.jsx';
 
 export default function App() {
   return (
@@ -46,6 +48,8 @@ export default function App() {
           <Route path="/usher" element={<UsherLayout />}>
             <Route index element={<UsherHomePage />} />
             <Route path="mark/:serviceId" element={<UsherMarkPage />} />
+            <Route path="visitors" element={<UsherVisitorsPage />} />
+            <Route path="marks" element={<UsherMarksPage />} />
           </Route>
         </Route>
       </Route>

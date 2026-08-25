@@ -73,10 +73,11 @@ async function recordVisit(visitorId, serviceId, recordedBy) {
   );
 }
 
-async function listVisitors({ serviceId, followupStatus, search, page = 1, pageSize = 20 }) {
+async function listVisitors({ serviceId, createdBy, followupStatus, search, page = 1, pageSize = 20 }) {
   const where = [];
   const params = [];
   if (serviceId) { params.push(serviceId); where.push(`v.service_id = $${params.length}`); }
+  if (createdBy) { params.push(createdBy); where.push(`v.created_by = $${params.length}`); }
   if (followupStatus) { params.push(followupStatus); where.push(`v.followup_status = $${params.length}`); }
   if (search) {
     params.push(`%${search}%`);

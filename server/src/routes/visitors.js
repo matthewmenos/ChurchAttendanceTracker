@@ -31,13 +31,16 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
   res.status(201).json(result);
 }));
 
-// Ushers can list visitors captured for the service they are marking.
+// Ushers can list visitors captured for the service they are marking,
+// or every visitor they personally captured (mine=1).
 router.get('/', authenticate, asyncHandler(async (req, res) => {
   const isAdmin = req.user.role === 'admin';
   const serviceId = vInt(req.query, 'serviceId');
-  if (!isAdmin && !serviceId) throw new ApiError(400, 'A service is required to list visitors.');
+  const mine = ['1', 'true'].includes(String(req.query.mine));
+  if (!isAdmin && !serviceId && !mine) throw new ApiError(400, 'Pass a serviceId or mine=1 to list visitors.');
   const result = await listVisitors({
     serviceId: serviceId || undefined,
+    createdBy: mine ? req.user.id : undefined,
     followupStatus: vEnum(req.query, 'followupStatus', ['new', 'contacted', 'visited', 'joined', 'lost']),
     search: vStr(req.query, 'search', { max: 100 }) || undefined,
     page: vInt(req.query, 'page') || 1,
