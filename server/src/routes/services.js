@@ -11,6 +11,7 @@ const LIST_SELECT = `
   SELECT s.id, s.service_date, s.service_name, s.start_time, s.total_headcount, s.notes,
          s.location_id, l.name AS location_name, s.created_at, s.updated_at,
          s.attendance_closed, s.attendance_closed_at, cb.name AS attendance_closed_by_name,
+         s.attendance_close_time,
          COALESCE(a.present, 0)::int AS present,
          COALESCE(a.absent, 0)::int  AS absent,
          COALESCE(a.excused, 0)::int AS excused,
@@ -47,7 +48,29 @@ async function serviceById(id) {
 function withFlags(row) {
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  return { ...row, upcoming: String(row.service_date) >= todayStr };
+  const schedulePassed = !!row.attendance_close_time
+    && new Date(row.attendance_close_time).getTime() <= Date.now();
+  return {
+    ...row,
+    upcoming: String(row.service_date) >= todayStr,
+    marking_closed: !!row.attendance_closed || schedulePassed,
+  };
+}
+
+/** Validate an optional 'YYYY-MM-DDTHH:MM[:SS]' close time from the client. */
+function readCloseTime(body) {
+  const raw = body ? body.attendanceCloseTime : undefined;
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (typeof raw !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(raw.trim())) {
+    throw new ApiError(400, 'The attendance close time is not a valid date/time.', [
+      { field: 'attendanceCloseTime', message: 'Use a valid date and time.' },
+    ]);
+  }
+  const d = new Date(raw.trim());
+  if (Number.isNaN(d.getTime())) {
+    throw new ApiError(400, 'The attendance close time is not a valid date/time.');
+  }
+  return d.toISOString();
 }
 
 // Ushers need the service list to pick the current service.
@@ -89,12 +112,13 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const locationId = await checkLocation(vInt(req.body, 'locationId'));
   const headcount = vInt(req.body, 'totalHeadcount', { min: 0, label: 'Total headcount' }) || 0;
   const notes = vStr(req.body, 'notes', { max: 500 });
+  const closeTime = readCloseTime(req.body);
 
   const { rows } = await db.query(
-    `INSERT INTO services (service_date, service_name, start_time, location_id, total_headcount, notes, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO services (service_date, service_name, start_time, location_id, total_headcount, notes, created_by, attendance_close_time)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING id`,
-    [serviceDate, serviceName, startTime, locationId, headcount, notes, req.user.id]
+    [serviceDate, serviceName, startTime, locationId, headcount, notes, req.user.id, closeTime]
   );
   res.status(201).json({ service: withFlags(await serviceById(rows[0].id)) });
 }));
@@ -118,12 +142,14 @@ router.post('/:id/close', authenticate, requireAdmin, asyncHandler(async (req, r
 }));
 
 /** Reopen attendance marking for this service (admin only). */
+/** Reopen attendance marking for this service (admin only).
+ *  Also clears any scheduled close time so the service stays open. */
 router.post('/:id/reopen', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const service = await serviceById(id);
   if (!service) throw new ApiError(404, 'Service not found.');
   await db.query(
-    'UPDATE services SET attendance_closed = FALSE, attendance_closed_at = NULL, attendance_closed_by = NULL WHERE id = $1',
+    'UPDATE services SET attendance_closed = FALSE, attendance_closed_at = NULL, attendance_closed_by = NULL, attendance_close_time = NULL WHERE id = $1',
     [id]
   );
   res.json({ service: withFlags(await serviceById(id)) });
@@ -140,13 +166,14 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
   const locationId = await checkLocation(vInt(req.body, 'locationId'));
   const headcount = vInt(req.body, 'totalHeadcount', { min: 0, label: 'Total headcount' }) || 0;
   const notes = vStr(req.body, 'notes', { max: 500 });
+  const closeTime = readCloseTime(req.body);
 
   await db.query(
     `UPDATE services
         SET service_date = $1, service_name = $2, start_time = $3,
-            location_id = $4, total_headcount = $5, notes = $6
-      WHERE id = $7`,
-    [serviceDate, serviceName, startTime, locationId, headcount, notes, id]
+            location_id = $4, total_headcount = $5, notes = $6, attendance_close_time = $7
+      WHERE id = $8`,
+    [serviceDate, serviceName, startTime, locationId, headcount, notes, closeTime, id]
   );
   res.json({ service: withFlags(await serviceById(id)) });
 }));

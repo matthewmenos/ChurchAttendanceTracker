@@ -67,10 +67,16 @@ export default function ServiceDetailPage() {
 
       <div className='chip-row' style={{ marginBottom: 12 }}>
         <Badge variant='neutral'>{service.upcoming ? 'Upcoming' : 'Past service'}</Badge>
-        {closed && (
+        {service.attendance_closed && (
           <Badge variant='high'>
             Marking closed{service.attendance_closed_by_name ? ` by ${service.attendance_closed_by_name}` : ''}{service.attendance_closed_at ? ` · ${formatDateTime(service.attendance_closed_at)}` : ''}
           </Badge>
+        )}
+        {!service.attendance_closed && service.attendance_close_time && !closed && (
+          <Badge variant='info'>Marking closes {formatDateTime(service.attendance_close_time)}</Badge>
+        )}
+        {!service.attendance_closed && service.attendance_close_time && closed && (
+          <Badge variant='high'>Close time passed · marking locked</Badge>
         )}
       </div>
 

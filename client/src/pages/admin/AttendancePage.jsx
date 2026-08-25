@@ -50,7 +50,7 @@ export default function AttendancePage() {
   const roster = useRoster(serviceId, { search: debounced, groupId, status: statusFilter });
   const rows = (roster.data && roster.data.rows) || [];
   const service = roster.data && roster.data.service;
-  const closed = !!(service && service.attendance_closed);
+  const closed = !!(service && (service.marking_closed ?? service.attendance_closed));
 
   useEffect(() => {
     document.title = 'Attendance — Church Attendance Tracker';

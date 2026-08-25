@@ -11,7 +11,7 @@ const router = express.Router();
 async function serviceById(id) {
   const { rows } = await db.query(
     `SELECT s.id, s.service_date, s.service_name, s.start_time, s.total_headcount,
-            s.attendance_closed, l.name AS location_name
+            s.attendance_closed, s.attendance_close_time, l.name AS location_name
        FROM services s
        LEFT JOIN locations l ON l.id = s.location_id
       WHERE s.id = $1`,
@@ -20,7 +20,19 @@ async function serviceById(id) {
   return rows[0];
 }
 
-const CLOSED_MSG = 'Attendance for this service has been closed by an admin. Ask an admin to reopen it before making changes.';
+const CLOSED_MSG_MANUAL = 'Attendance for this service has been closed by an admin. Ask an admin to reopen it before making changes.';
+const CLOSED_MSG_SCHEDULE = 'The attendance close time for this service has passed, so marking is locked. Ask an admin to extend or remove the close time.';
+
+function isMarkingClosed(svc) {
+  return !!svc && (
+    svc.attendance_closed
+    || (!!svc.attendance_close_time && new Date(svc.attendance_close_time).getTime() <= Date.now())
+  );
+}
+
+function closedMessage(svc) {
+  return svc && !svc.attendance_closed && svc.attendance_close_time ? CLOSED_MSG_SCHEDULE : CLOSED_MSG_MANUAL;
+}
 
 async function recordById(id) {
   const { rows } = await db.query(
@@ -90,7 +102,11 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
   );
 
   res.json({
-    service: { ...service, totals: await getServiceTotals(db, serviceId) },
+    service: {
+    ...service,
+    marking_closed: isMarkingClosed(service),
+    totals: await getServiceTotals(db, serviceId),
+  },
     rows: outRows,
     markedCount,
     totalEligible: rows.length,
@@ -107,7 +123,7 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
 
   const service = await serviceById(serviceId);
   if (!service) throw new ApiError(404, 'Service not found.');
-  if (service.attendance_closed) throw new ApiError(403, CLOSED_MSG);
+  if (isMarkingClosed(service)) throw new ApiError(403, closedMessage(service));
 
   const { rows: memberRows } = await db.query('SELECT id, status FROM members WHERE id = $1', [memberId]);
   const member = memberRows[0];
@@ -145,7 +161,7 @@ router.put('/:id', authenticate, asyncHandler(async (req, res) => {
   if (!record) throw new ApiError(404, 'Attendance record not found.');
 
   const svc = await serviceById(record.service_id);
-  if (svc && svc.attendance_closed) throw new ApiError(403, CLOSED_MSG);
+  if (isMarkingClosed(svc)) throw new ApiError(403, closedMessage(svc));
 
   if (req.user.role !== 'admin') {
     const settings = await getSettingsMap(db);
@@ -239,7 +255,7 @@ router.delete('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) 
   const { rows } = await db.query('SELECT member_id, service_id FROM attendance WHERE id = $1', [id]);
   if (!rows.length) throw new ApiError(404, 'Attendance record not found.');
   const svc = await serviceById(rows[0].service_id);
-  if (svc && svc.attendance_closed) throw new ApiError(403, CLOSED_MSG);
+  if (isMarkingClosed(svc)) throw new ApiError(403, closedMessage(svc));
   await db.query('DELETE FROM attendance WHERE id = $1 RETURNING member_id', [id]);
   await recomputeMemberStats(db, rows[0].member_id);
   res.status(204).end();

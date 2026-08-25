@@ -16,6 +16,15 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** ISO timestamp -> value usable by <input type='datetime-local'> in local time. */
+function toLocalDT(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function ServicesPage() {
   const toast = useToast();
   const [tab, setTab] = useState('upcoming');
@@ -54,6 +63,7 @@ export default function ServicesPage() {
       startTime: form.get('startTime'),
       locationId: form.get('locationId') ? Number(form.get('locationId')) : null,
       totalHeadcount: form.get('totalHeadcount') === '' ? 0 : Number(form.get('totalHeadcount')),
+      attendanceCloseTime: form.get('attendanceCloseTime') || null,
       notes: form.get('notes'),
     };
     setSaving(true);
@@ -112,7 +122,7 @@ export default function ServicesPage() {
               { key: 'start_time', label: 'Time', render: (r) => (r.start_time ? formatTime(r.start_time) : '—') },
               { key: 'location_name', label: 'Location', render: (r) => r.location_name || '—' },
               { key: 'total_headcount', label: 'Headcount', className: 'num' },
-              { key: 'present', label: 'Attendance', render: (r) => (<span><Badge variant={r.marked > 0 ? 'info' : 'neutral'}>{r.present} marked</Badge>{r.attendance_closed ? <Badge variant='high'>Closed</Badge> : null}</span>) },
+              { key: 'present', label: 'Attendance', render: (r) => (<span><Badge variant={r.marked > 0 ? 'info' : 'neutral'}>{r.present} marked</Badge>{r.marking_closed ? <Badge variant='high'>Closed</Badge> : null}</span>) },
               {
                 key: 'actions',
                 label: 'Actions',
@@ -140,6 +150,22 @@ export default function ServicesPage() {
               <Input id='sv-time' name='startTime' type='time' defaultValue={editing && editing.start_time ? String(editing.start_time).slice(0, 5) : '09:30'} />
             </Field>
           </div>
+          <Field
+            label='Attendance close time'
+            id='sv-close'
+            hint={
+              editing && editing.attendance_closed
+                ? 'Marking is already closed for this service.'
+                : 'After this moment attendance marking locks automatically. Leave empty for no limit.'
+            }
+          >
+            <Input
+              id='sv-close'
+              name='attendanceCloseTime'
+              type='datetime-local'
+              defaultValue={toLocalDT(editing && (editing.attendance_close_time || null))}
+            />
+          </Field>
           <Field label='Service name' id='sv-name' required>
             <Input id='sv-name' name='serviceName' defaultValue={editing ? editing.service_name : ''} placeholder='e.g. Sunday Worship Service' required maxLength={120} />
           </Field>
