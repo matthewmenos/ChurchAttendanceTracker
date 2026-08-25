@@ -84,6 +84,16 @@ function NotificationsTab({ enabledInitial }) {
   // ---- master switch (saved via /settings like the other tabs) ----
   const [enabled, setEnabled] = useState(enabledInitial);
   const [savingEnabled, setSavingEnabled] = useState(false);
+  // ---- visitor thank-you ----
+  const settingsQ2 = useFetch(() => api('/settings'), []);
+  const s2 = (settingsQ2.data && settingsQ2.data.settings) || {};
+  const [thanksEnabled, setThanksEnabled] = useState(true);
+  const [thanksTmpl, setThanksTmpl] = useState('Hi {{first_name}}! Thank you for visiting {{church_name}} today. We would love to welcome you back.');
+
+  useEffect(() => {
+    if (s2.visitor_thanks_enabled !== undefined) setThanksEnabled(s2.visitor_thanks_enabled !== 'false');
+    if (s2.visitor_thanks_template !== undefined) setThanksTmpl(s2.visitor_thanks_template);
+  }, [s2.visitor_thanks_enabled, s2.visitor_thanks_template]);
   const saveEnabled = async (next) => {
     setSavingEnabled(true);
     try {
@@ -92,6 +102,22 @@ function NotificationsTab({ enabledInitial }) {
       toast(next ? 'SMS notifications turned on.' : 'SMS notifications turned off.');
     } catch (err) {
       toast(err.message || 'Could not save the setting.');
+    } finally {
+      setSavingEnabled(false);
+    }
+  };
+
+  const saveThanksSettings = async (e) => {
+    e.preventDefault();
+    setSavingEnabled(true);
+    try {
+      await api('/settings', {
+        method: 'PUT',
+        body: { visitor_thanks_enabled: thanksEnabled, visitor_thanks_template: thanksTmpl },
+      });
+      toast('Visitor thank-you settings saved.');
+    } catch (err) {
+      toast(err.message || 'Could not save visitor thank-you settings.');
     } finally {
       setSavingEnabled(false);
     }
@@ -148,6 +174,7 @@ function NotificationsTab({ enabledInitial }) {
   };
 
   const count = audience ? audience.count : null;
+  const thanksTemplateValid = thanksTmpl.trim().length > 0 && thanksTmpl.includes('{{first_name}}');
   return (
     <>
       <div className='card pad'>
@@ -165,6 +192,34 @@ function NotificationsTab({ enabledInitial }) {
             : ' Arkasel is NOT configured — sends run in dry-run mode only.')}
           {savingEnabled ? ' Saving…' : ''}
         </p>
+      </div>
+
+      <div className='card pad' style={{ marginTop: 16 }}>
+        <h2 className='card-title'>Visitor thank-you SMS</h2>
+        <form onSubmit={saveThanksSettings} noValidate>
+          <Checkbox
+            id='visitor_thanks_enabled'
+            checked={thanksEnabled}
+            onChange={(e) => setThanksEnabled(e.target.checked)}
+            label='Send a thank-you SMS to new visitors'
+          />
+          <p className='field-hint'>
+            Sent automatically when an usher captures a first-time visitor with a phone number.
+            Uses the same Arkasel gateway (dry-run when not configured).
+          </p>
+          <Field label='Thank-you template' id='visitor_thanks_template' hint='Use {{first_name}}, {{full_name}}, {{church_name}}. Must include {{first_name}}.'>
+            <Textarea
+              id='visitor_thanks_template'
+              rows={3}
+              maxLength={480}
+              value={thanksTmpl}
+              onChange={(e) => setThanksTmpl(e.target.value)}
+            />
+          </Field>
+          <div className='modal-actions'>
+            <Button type='submit' loading={savingEnabled} disabled={!thanksTemplateValid}>Save visitor settings</Button>
+          </div>
+        </form>
       </div>
 
       <div className='card pad' style={{ marginTop: 16 }}>

@@ -268,6 +268,28 @@ async function main() {
   console.log(`  Admin : ${env.seed.adminEmail} / ${env.seed.adminPassword}`);
   console.log(`  Usher : ${env.seed.usherEmail} / ${env.seed.usherPassword}`);
   console.log(`  Usher : daniel@${env.seed.usherEmail.split('@')[1]} / same password as above`);
+
+  // ---------- demo visitors ----------
+  const newestService = await db.query('SELECT id FROM services ORDER BY service_date DESC LIMIT 1');
+  const demoServiceId = newestService.rows[0].id;
+  const demoVisitors = [
+    ['Nana Ama Konadu', 'female', '+1 555-0701', 'adult', 'Agona, Ahanta West', 'Victoria Lamptey', 'I want to join the choir.'],
+    ['Kojo Asante', 'male', '+1 555-0702', 'teen', 'Busua', 'Felix Nkrumah', null],
+    ['Mabel Owusu', 'female', '+1 555-0703', 'adult', 'Dixcove', 'Esther Boateng', 'Pray for my family.'],
+    ['Kwabena Osei', 'male', '+1 555-0704', 'child', 'Agona', 'Priscilla Agyeman', null],
+  ];
+  for (const [name, g, phone, age, area, invited, prayer] of demoVisitors) {
+    const ins = await db.query(
+      `INSERT INTO visitors (full_name, gender, phone, age_group, home_area, invited_by, prayer_request, service_id, first_visit_date, last_visit_date, created_by, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_DATE, CURRENT_DATE, $9, 'Captured at the door by the usher team.')
+       RETURNING id`,
+      [name, g, phone, age, area, invited, prayer, demoServiceId, usher1]
+    );
+    await db.query(
+      'INSERT INTO visitor_visits (visitor_id, service_id, visit_date, recorded_by) VALUES ($1, $2, CURRENT_DATE, $3)',
+      [ins.rows[0].id, demoServiceId, usher1]
+    );
+  }
   console.log(`Members: ${memberIds.length}, Services: ${serviceIds.length}, Follow-up plans: ${absentees.length}`);
 }
 

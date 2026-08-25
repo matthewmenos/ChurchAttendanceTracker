@@ -14,6 +14,7 @@ import ServiceDetailPage from './pages/admin/ServiceDetailPage.jsx';
 import ReportsPage from './pages/admin/ReportsPage.jsx';
 import UsersPage from './pages/admin/UsersPage.jsx';
 import SettingsPage from './pages/admin/SettingsPage.jsx';
+import VisitorsPage from './pages/admin/VisitorsPage.jsx';
 import UsherHomePage from './pages/usher/UsherHomePage.jsx';
 import UsherMarkPage from './pages/usher/UsherMarkPage.jsx';
 
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="services" element={<ServicesPage />} />
             <Route path="services/:id" element={<ServiceDetailPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="visitors" element={<VisitorsPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>

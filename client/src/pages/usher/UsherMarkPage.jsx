@@ -11,7 +11,7 @@ import SearchInput from '../../components/ui/SearchInput.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Field, Textarea } from '../../components/ui/forms.jsx';
 import { formatDate, formatTime } from '../../utils/format.js';
-import { IconSearch, IconFileText, IconCheck, IconLock } from '../../components/ui/icons.jsx';
+import { IconSearch, IconFileText, IconCheck, IconLock, IconUsers } from '../../components/ui/icons.jsx';
 
 export default function UsherMarkPage() {
   const { serviceId } = useParams();
@@ -23,6 +23,60 @@ export default function UsherMarkPage() {
   const [saveError, setSaveError] = useState(null);
   const [noteTarget, setNoteTarget] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
+
+  // ---- visitor capture ----
+  const [visitors, setVisitors] = useState([]);
+  const [visitorsLoading, setVisitorsLoading] = useState(false);
+  const [visitorForm, setVisitorForm] = useState({ fullName: '', phone: '', gender: '', ageGroup: '', invitedBy: '', homeArea: '' });
+  const [savingVisitor, setSavingVisitor] = useState(false);
+  const [visitorMsg, setVisitorMsg] = useState(null);
+
+  const loadVisitors = async () => {
+    if (!serviceId) return;
+    setVisitorsLoading(true);
+    try {
+      const res = await api('/visitors', { params: { serviceId } });
+      setVisitors(res.items || []);
+    } catch {
+      setVisitors([]);
+    } finally {
+      setVisitorsLoading(false);
+    }
+  };
+
+  useEffect(() => { loadVisitors(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [serviceId]);
+
+  const submitVisitor = async (e) => {
+    e.preventDefault();
+    setSavingVisitor(true);
+    setVisitorMsg(null);
+    try {
+      const res = await api('/visitors', {
+        method: 'POST',
+        body: {
+          serviceId: Number(serviceId),
+          fullName: visitorForm.fullName,
+          phone: visitorForm.phone || undefined,
+          gender: visitorForm.gender || undefined,
+          ageGroup: visitorForm.ageGroup || undefined,
+          invitedBy: visitorForm.invitedBy || undefined,
+          homeArea: visitorForm.homeArea || undefined,
+        },
+      });
+      setVisitorMsg({
+        tone: res.returning ? 'info' : 'success',
+        text: res.returning
+          ? `${visitorForm.fullName} is a returning visitor (visit #${res.visitor.visit_count}).`
+          : `Welcome, ${visitorForm.fullName}!${res.thanksStatus === 'sent' ? ' Thank-you SMS sent.' : res.thanksStatus === 'dry-run' ? ' (Thank-you SMS dry-run.)' : ''}`,
+      });
+      setVisitorForm({ fullName: '', phone: '', gender: '', ageGroup: '', invitedBy: '', homeArea: '' });
+      await loadVisitors();
+    } catch (err) {
+      setVisitorMsg({ tone: 'error', text: err.message || 'Could not add the visitor.' });
+    } finally {
+      setSavingVisitor(false);
+    }
+  };
 
   const groups = useFetch(() => api('/groups'), []);
   const roster = useRoster(serviceId, { search: debounced, groupId });
@@ -197,6 +251,74 @@ export default function UsherMarkPage() {
           )}
         </div>
       </footer>
+
+      <section className='card pad usher-visitors' style={{ marginTop: 18 }} aria-label='Visitor registration'>
+        <div className='card-head-row'>
+          <h2 className='card-title'><IconUsers size={18} style={{ verticalAlign: '-3px' }} /> Visitors</h2>
+          <span className='muted small'>{visitors.length} recorded for this service</span>
+        </div>
+
+        <form onSubmit={submitVisitor} className='visitor-form' noValidate>
+          <div className='field-row'>
+            <Field label='Full name' id='uv-name' required>
+              <Input id='uv-name' value={visitorForm.fullName} onChange={(e) => setVisitorForm({ ...visitorForm, fullName: e.target.value })} required maxLength={120} autoComplete='off' placeholder='e.g. Ama Kwakye' />
+            </Field>
+            <Field label='Phone' id='uv-phone' required hint='Used to spot returning visitors'>
+              <Input id='uv-phone' value={visitorForm.phone} onChange={(e) => setVisitorForm((f) => ({ ...f, phone: e.target.value }))} required maxLength={40} autoComplete='off' placeholder='+1 555-' />
+            </Field>
+          </div>
+          <div className='field-row'>
+            <Field label='Gender' id='uv-gender'>
+              <Select id='uv-gender' value={visitorForm.gender} onChange={(e) => setVisitorForm({ ...visitorForm, gender: e.target.value })}>
+                <option value=''>Not specified</option>
+                <option value='male'>Male</option>
+                <option value='female'>Female</option>
+              </Select>
+            </Field>
+            <Field label='Age group' id='uv-age'>
+              <Select id='uv-age' value={visitorForm.ageGroup} onChange={(e) => setVisitorForm({ ...visitorForm, ageGroup: e.target.value })}>
+                <option value=''>Not specified</option>
+                <option value='child'>Child</option>
+                <option value='teen'>Teen</option>
+                <option value='adult'>Adult</option>
+              </Select>
+            </Field>
+          </div>
+          <div className='field-row'>
+            <Field label='Invited by' id='uv-invited'>
+              <Input id='uv-invited' value={visitorForm.invitedBy} onChange={(e) => setVisitorForm({ ...visitorForm, invitedBy: e.target.value })} maxLength={120} placeholder='Who brought them?' autoComplete='off' />
+            </Field>
+            <Field label='Home area' id='uv-area'>
+              <Input id='uv-area' value={visitorForm.homeArea} onChange={(e) => setVisitorForm({ ...visitorForm, homeArea: e.target.value })} maxLength={120} placeholder='Neighbourhood' autoComplete='off' />
+            </Field>
+          </div>
+          {visitorMsg && <Alert variant={visitorMsg.tone}>{visitorMsg.text}</Alert>}
+          <div className='modal-actions'>
+            <Button type='submit' loading={savingVisitor} disabled={!visitorForm.fullName.trim() || !visitorForm.phone.trim()}>Add visitor</Button>
+          </div>
+        </form>
+
+        {visitorsLoading && <LoadingBlock label='Loading visitors…' />}
+        {!visitorsLoading && visitors.length > 0 && (
+          <ul className='stack' style={{ marginTop: 12 }}>
+            {visitors.map((v) => (
+              <li key={v.id} className='follow-item card-lite'>
+                <span className='follow-meta'>
+                  <strong>{v.full_name}</strong>
+                  {v.visit_count > 1
+                    ? <Badge variant='info'>Returning · #{v.visit_count}</Badge>
+                    : <Badge variant='neutral'>First time</Badge>}
+                  {v.gender && <Badge variant='neutral'>{v.gender === 'male' ? 'Male' : 'Female'}</Badge>}
+                </span>
+                <span className='muted small'>
+                  {v.phone || 'No phone'}{v.age_group ? ` · ${v.age_group[0].toUpperCase() + v.age_group.slice(1)}` : ''}
+                  {v.home_area ? ` · ${v.home_area}` : ''}{v.invited_by ? ` · invited by ${v.invited_by}` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <Modal
         open={!!noteTarget}

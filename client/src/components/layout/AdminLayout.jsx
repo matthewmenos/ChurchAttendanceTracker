@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { to: '/admin/members', label: 'Members', icon: IconUsers },
   { to: '/admin/services', label: 'Services', icon: IconCalendar },
   { to: '/admin/reports', label: 'Reports', icon: IconTrendingUp },
+  { to: '/admin/visitors', label: 'Visitors', icon: IconUsers },
   { to: '/admin/users', label: 'Users', icon: IconShield },
   { to: '/admin/settings', label: 'Settings', icon: IconSettings },
 ];

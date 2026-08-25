@@ -35,6 +35,7 @@ router.use('/users', require('./users'));
 router.use('/members', require('./members'));
 router.use('/services', require('./services'));
 router.use('/attendance', require('./attendance'));
+router.use('/visitors', require('./visitors'));
 router.use('/groups', require('./groups'));
 router.use('/locations', require('./locations'));
 router.use('/followups', require('./followups'));

@@ -49,6 +49,16 @@ router.put('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'notifications_enabled')) {
     updates.push(['notifications_enabled', String(vBool(req.body, 'notifications_enabled', { required: true }))]);
   }
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'visitor_thanks_enabled')) {
+    updates.push(['visitor_thanks_enabled', String(vBool(req.body, 'visitor_thanks_enabled', { required: true }))]);
+  }
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'visitor_thanks_template')) {
+    const tpl = vStr(req.body, 'visitor_thanks_template', { required: true, min: 2, max: 500, label: 'Visitor thank-you template' });
+    if (tpl && !/\{\{\s*first_name\s*\}\}/.test(tpl)) {
+      throw new ApiError(400, 'The visitor thank-you template must include {{first_name}}.');
+    }
+    updates.push(['visitor_thanks_template', tpl]);
+  }
 
   for (const [key, value] of updates) {
     await db.query(

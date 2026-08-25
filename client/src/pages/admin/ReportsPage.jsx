@@ -36,7 +36,9 @@ export default function ReportsPage() {
   }, []);
 
   const summaryQ = useFetch(() => api('/reports/summary', { params: { from, to } }), [rangeKey]);
+  const visitorsQ = useFetch(() => api('/visitors/stats', { params: { from, to } }), [rangeKey]);
   const data = summaryQ.data;
+  const visitorStats = (visitorsQ.data && visitorsQ.data.items) || [];
 
   const trendPoints = useMemo(
     () => ((data && data.byService) || []).map((s) => ({ label: formatShortDate(s.service_date), value: s.present })),
@@ -133,6 +135,29 @@ export default function ReportsPage() {
               { key: 'total_headcount', label: 'Headcount', className: 'num' },
             ]}
           />
+        )}
+      </section>
+
+      <section className='card' aria-label='Visitors by service'>
+        <h2 className='card-title pad-inline'>Visitors</h2>
+        {visitorStats.length ? (
+          <Table
+            caption='Visitors by service'
+            rows={visitorStats}
+            getRowKey={(r) => r.id}
+            columns={[
+              { key: 'service_date', label: 'Date', render: (r) => formatShortDate(r.service_date) },
+              { key: 'service_name', label: 'Service', render: (r) => <Link to={`/admin/services/${r.id}`}>{r.service_name}</Link> },
+              { key: 'total_visitors', label: 'Visitors', className: 'num' },
+              { key: 'first_time', label: 'First', className: 'num' },
+              { key: 'returning', label: 'Returning', className: 'num' },
+              { key: 'male', label: 'Male', className: 'num' },
+              { key: 'female', label: 'Female', className: 'num' },
+              { key: 'converted', label: 'Joined', className: 'num' },
+            ]}
+          />
+        ) : (
+          <p className='muted pad-inline'>No visitors recorded in this range.</p>
         )}
       </section>
 
