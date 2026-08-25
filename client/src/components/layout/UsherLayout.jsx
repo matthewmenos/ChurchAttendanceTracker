@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext.jsx';
 import { Avatar } from '../ui/display.jsx';
 import { Alert } from '../ui/feedback.jsx';
 import ChangePasswordModal from '../ChangePasswordModal.jsx';
+import InstallPrompt from '../InstallPrompt.jsx';
 import Logo from '../ui/Logo.jsx';
 import { IconKey, IconCalendar, IconUsers, IconClipboardCheck } from '../ui/icons.jsx';
 
@@ -25,6 +26,7 @@ export default function UsherLayout() {
           <span>{(user && user.churchName) || 'Attendance'}</span>
         </div>
         <div className='usher-user'>
+          <InstallPrompt />
           <button type='button' className='icon-btn' onClick={() => setPwOpen(true)} aria-label='Change password' title='Change password'>
             <IconKey size={18} />
           </button>

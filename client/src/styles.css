@@ -328,7 +328,10 @@ table.table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 .brand-mark.logo img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
 .brand-mark.big { width: 52px; height: 52px; font-size: 1.7rem; margin-bottom: 8px; }
 .login-logo.big { width: 52px; height: 52px; margin-bottom: 8px; }
-.brand-text { line-height: 1.25; }
+.brand-text {
+  line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px;
+}
 .logo-upload-area {
   border: 2px dashed var(--line); border-radius: 8px; min-height: 110px;
   display: flex; align-items: center; justify-content: center;
@@ -367,7 +370,22 @@ table.table { width: 100%; border-collapse: collapse; font-size: .92rem; }
   background: rgba(255,255,255,.92); backdrop-filter: blur(6px);
   border-bottom: 1px solid var(--line); padding: 10px 18px;
 }
-.topbar-title { font-weight: 700; font-size: .95rem; flex: 1; }
+.topbar-title {
+  font-weight: 700; font-size: .95rem; flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* PWA install prompt — works in both the light admin topbar and the dark usher bar */
+.install-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-weight: 700; font-size: .8rem;
+  padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  background: var(--yellow-500); color: var(--blue-900);
+  border: 1px solid transparent;
+  transition: filter .15s;
+}
+.install-btn:hover { filter: brightness(1.06); text-decoration: none; }
+.install-btn:focus-visible { outline: 2px solid var(--yellow-400); outline-offset: 1px; }
+.usher-topbar .install-btn { box-shadow: 0 0 0 1px rgba(255,255,255,.18); }
 .topbar-user { color: var(--ink-600); font-size: .86rem; }
 .nav-toggle { display: none; font-size: 1.25rem; }
 .admin-main { flex: 1; }
@@ -380,7 +398,10 @@ table.table { width: 100%; border-collapse: collapse; font-size: .92rem; }
   color: #fff; display: flex; align-items: center; justify-content: space-between;
   padding: 12px 18px; gap: 12px;
 }
-.usher-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+.usher-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; min-width: 0; flex: 1 1 auto; }
+.usher-brand > span:last-child {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw;
+}
 .usher-user { display: flex; align-items: center; gap: 9px; }
 .usher-name { font-weight: 600; }
 .usher-user .icon-btn:hover { background: rgba(255,255,255,.15); }
@@ -499,15 +520,17 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
 .member-notes { background: var(--yellow-50); border: 1px solid var(--yellow-100); border-radius: 8px; padding: 8px 12px; font-size: .9rem; }
 .member-hero-actions { display: grid; gap: 8px; }
 /* ---------------- usher nav ---------------- */
-.usher-nav { background: #fff; padding: 0 18px; margin-bottom: 6px; }
-.usher-nav a { text-decoration: none; display: inline-flex; align-items: center; gap: 7px; }
+.usher-nav { background: #fff; padding: 0 18px; margin-bottom: 6px; overflow-x: auto; scrollbar-width: none; }
+.usher-nav::-webkit-scrollbar { display: none; }
+.usher-nav a { text-decoration: none; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 
 /* ---------------- responsive ---------------- */
 @media (max-width: 1024px) {
-  .stat-grid, .stat-grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .stat-grid, .stat-grid-4, .stat-grid-3 { grid-template-columns: repeat(2, 1fr); }
   .grid-2 { grid-template-columns: 1fr; }
 }
 
+/* Tables collapse to label/value cards from tablets down (was 720px). */
 @media (max-width: 900px) {
   .sidebar {
     position: fixed; left: 0; top: 0; bottom: 0; height: 100%;
@@ -517,10 +540,7 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
   .nav-toggle { display: inline-block; }
 }
 
-@media (max-width: 720px) {
-  html { font-size: 15px; }
-  .container { padding: 14px 14px 120px; }
-  /* tables collapse into cards */
+@media (max-width: 860px) {
   table.table, .table tbody, .table tr, .table td { display: block; width: 100%; }
   .table thead { display: none; }
   .table tr { border-bottom: 1px solid var(--line); padding: 10px 6px; }
@@ -536,6 +556,12 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
   }
   .table td.num { text-align: right; }
   .row-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 720px) {
+  html { font-size: 15px; }
+  .container { padding: 14px 14px 120px; }
+  .service-card { flex-wrap: wrap; }
   .mark-row { flex-wrap: wrap; }
   .mark-name { flex-basis: calc(100% - 96px); }
   .seg { margin-left: auto; }
@@ -546,10 +572,33 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
   .topbar-user { display: none; }
 }
 
-@media (max-width: 480px) {
-  .stat-grid, .stat-grid-4 { grid-template-columns: 1fr; }
-  .mark-audit { display: none; }
+@media (max-width: 560px) {
+  /* horizontal bar charts: label + value on one line, bar spans full width below */
+  .bar-list li { grid-template-columns: 1fr auto; row-gap: 4px; }
+  .bar-track { grid-column: 1 / -1; grid-row: 2; }
+  /* filter rows: give each control the full width instead of squeezing */
+  .filter-bar .field, .filter-bar .search-input, .filter-bar .select-fit { flex-basis: 100%; }
+  .filter-bar .btn { flex: 1 1 auto; }
 }
+
+@media (max-width: 480px) {
+  .stat-grid, .stat-grid-4, .stat-grid-3 { grid-template-columns: 1fr; }
+  .mark-audit { display: none; }
+  /* usher topbar: reclaim space on small phones */
+  .usher-name { display: none; }
+  .usher-user { gap: 6px; }
+  .usher-topbar { padding: 10px 12px; }
+  .usher-topbar .btn-outline-light { padding: 4px 9px; font-size: .78rem; }
+  .usher-brand > span:last-child { max-width: 34vw; }
+  /* modals become bottom sheets — !important overrides any inline width prop */
+  .modal-backdrop { padding: 0; align-items: flex-end; }
+  .modal {
+    width: 100% !important; max-width: 100% !important; max-height: 92vh;
+    border-radius: 16px 16px 0 0;
+    animation: sheet-up .22s ease-out;
+  }
+}
+@keyframes sheet-up { from { transform: translateY(28px); opacity: .5; } }
 
 /* ---------------- svg icons ---------------- */
 .checkbox-row { display: flex; flex-wrap: wrap; gap: 10px 18px; padding-top: 4px; }

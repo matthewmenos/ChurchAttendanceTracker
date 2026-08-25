@@ -6,6 +6,7 @@ import { Alert } from '../ui/feedback.jsx';
 import { Button } from '../ui/forms.jsx';
 import Logo from '../ui/Logo.jsx';
 import ChangePasswordModal from '../ChangePasswordModal.jsx';
+import InstallPrompt from '../InstallPrompt.jsx';
 import {
   IconChart,
   IconClipboardCheck,
@@ -101,6 +102,7 @@ export default function AdminLayout() {
             <IconMenu size={22} />
           </button>
           <span className='topbar-title'>Church Attendance Tracker</span>
+          <InstallPrompt />
           <span className='topbar-user' title={user ? user.email : ''}>{user ? user.name : ''}</span>
         </header>
 
