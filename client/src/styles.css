@@ -390,7 +390,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: #fff; }
 .seg-btn {
   font: inherit; font-weight: 800; cursor: pointer; border: none; background: transparent;
-  width: 44px; height: 36px; color: var(--ink-600);
+  width: 44px; height: 36px; color: var(--ink-600); position: relative;
   border-right: 1px solid var(--line); transition: background .12s, color .12s;
 }
 .seg-btn:last-child { border-right: none; }
@@ -399,6 +399,13 @@ table.table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 .seg-present.active { background: var(--green-600); color: #fff; }
 .seg-absent.active { background: var(--red-600); color: #fff; }
 .seg-excused.active { background: var(--blue-600); color: #fff; }
+.seg-btn.active { position: relative; }
+.seg-btn.active-clear .seg-clear-dot {
+  content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px;
+  border-radius: 50%; background: rgba(0,0,0,.5);
+}
+.seg-clear-dot { display: none; }
+.seg-btn.active-clear .seg-clear-dot { display: block; }
 .save-bar {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 95;
   background: rgba(255,255,255,.97); border-top: 1px solid var(--line);

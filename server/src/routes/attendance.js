@@ -62,30 +62,67 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
   const groupId = vInt(req.query, 'groupId');
   const statusFilter = vEnum(req.query, 'status', ['all', 'unmarked', 'present', 'absent', 'excused']) || 'all';
   const memberStatus = vEnum(req.query, 'memberStatus', ['active', 'inactive', 'all']) || 'active';
+  const page = Math.max(1, vInt(req.query, 'page') || 1);
+  const pageSize = Math.min(200, Math.max(1, vInt(req.query, 'pageSize') || 50));
 
-  const { rows } = await db.query(
-    `SELECT m.id AS member_id, m.full_name, m.phone, m.email, m.status AS member_status,
-            COALESCE((
-              SELECT string_agg(g.name, ', ' ORDER BY g.name)
-                FROM member_group_assignments mga JOIN member_groups g ON g.id = mga.group_id
-               WHERE mga.member_id = m.id
-            ), '') AS group_name,
-            a.id AS attendance_id, a.status, a.notes, a.recorded_at, a.updated_at,
-            COALESCE(uu.name, ru.name) AS recorded_by_name
-       FROM members m
-       LEFT JOIN attendance a ON a.member_id = m.id AND a.service_id = $1
-       LEFT JOIN users ru ON ru.id = a.recorded_by_user_id
-       LEFT JOIN users uu ON uu.id = a.updated_by_user_id
-      WHERE ($2 = '' OR m.full_name ILIKE '%' || $2 || '%')
-        AND ($3::int IS NULL OR EXISTS (SELECT 1 FROM member_group_assignments mga WHERE mga.member_id = m.id AND mga.group_id = $3))
-        AND ($4 = 'all' OR m.status = $4)
-      ORDER BY m.full_name ASC`,
-    [serviceId, search, groupId, memberStatus]
-  );
+  // Build filtering in SQL so pagination stays correct even with many members.
+  const where = ['true'];
+  const params = [serviceId];
+  const push = (v) => { params.push(v); return params.length; };
+  if (search) where.push(`m.full_name ILIKE '%' || $${push(`%${search}%`)} || '%'`);
+  if (groupId) where.push(`EXISTS (SELECT 1 FROM member_group_assignments mga WHERE mga.member_id = m.id AND mga.group_id = $${push(groupId)})`);
+  if (memberStatus !== 'all') where.push(`m.status = $${push(memberStatus)}`);
+  if (statusFilter === 'unmarked') where.push('a.id IS NULL');
+  else if (statusFilter !== 'all') where.push(`a.status = $${push(statusFilter)}`);
+  const whereSql = where.join(' AND ');
+
+  // Base filters (without status) drive the totals the save-bar shows.
+  const baseWhere = ['true'];
+  const baseParams = [serviceId];
+  const bpush = (v) => { baseParams.push(v); return baseParams.length; };
+  if (search) baseWhere.push(`m.full_name ILIKE '%' || $${bpush(`%${search}%`)} || '%'`);
+  if (groupId) baseWhere.push(`EXISTS (SELECT 1 FROM member_group_assignments mga WHERE mga.member_id = m.id AND mga.group_id = $${bpush(groupId)})`);
+  if (memberStatus !== 'all') baseWhere.push(`m.status = $${bpush(memberStatus)}`);
+  const baseWhereSql = baseWhere.join(' AND ');
+
+  const { rows } = await db.query({
+    text: `SELECT m.id AS member_id, m.full_name, m.phone, m.email, m.status AS member_status,
+                  COALESCE((
+                    SELECT string_agg(g.name, ', ' ORDER BY g.name)
+                      FROM member_group_assignments mga JOIN member_groups g ON g.id = mga.group_id
+                     WHERE mga.member_id = m.id
+                  ), '') AS group_name,
+                  a.id AS attendance_id, a.status, a.notes, a.recorded_at, a.updated_at,
+                  COALESCE(uu.name, ru.name) AS recorded_by_name
+             FROM members m
+             LEFT JOIN attendance a ON a.member_id = m.id AND a.service_id = $1
+             LEFT JOIN users ru ON ru.id = a.recorded_by_user_id
+             LEFT JOIN users uu ON uu.id = a.updated_by_user_id
+            WHERE ${whereSql}
+            ORDER BY m.full_name ASC
+            LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
+    values: params,
+  });
+
+  const { rows: cnt } = await db.query({
+    text: `SELECT COUNT(*) AS n
+             FROM members m
+             LEFT JOIN attendance a ON a.member_id = m.id AND a.service_id = $1
+            WHERE ${whereSql}`,
+    values: params,
+  });
+
+  // Totals across the base member pool (search/group/memberStatus, ignoring status filter).
+  const { rows: baseCnt } = await db.query({
+    text: `SELECT COUNT(*) AS total,
+                  COUNT(a.id) FILTER (WHERE a.id IS NOT NULL) AS marked
+             FROM members m
+             LEFT JOIN attendance a ON a.member_id = m.id AND a.service_id = $1
+            WHERE ${baseWhereSql}`,
+    values: baseParams,
+  });
 
   let outRows = rows;
-  if (statusFilter === 'unmarked') outRows = rows.filter((r) => !r.attendance_id);
-  else if (statusFilter !== 'all') outRows = rows.filter((r) => r.status === statusFilter);
 
   // Ushers only see contact details when the admin allows it.
   if (req.user.role !== 'admin') {
@@ -95,7 +132,8 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
     }
   }
 
-  const markedCount = rows.filter((r) => r.attendance_id).length;
+  const markedRow = baseCnt[0];
+  const total = Number(markedRow.total);
   const lastUpdated = rows.reduce(
     (acc, r) => (r.updated_at && (!acc || new Date(r.updated_at) > new Date(acc)) ? r.updated_at : acc),
     null
@@ -108,8 +146,11 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
     totals: await getServiceTotals(db, serviceId),
   },
     rows: outRows,
-    markedCount,
-    totalEligible: rows.length,
+    markedCount: Number(markedRow.marked),
+    totalEligible: total,
+    page,
+    pageSize,
+    total,
     lastUpdated,
   });
 }));

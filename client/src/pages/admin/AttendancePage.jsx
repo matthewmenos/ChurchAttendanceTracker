@@ -34,12 +34,13 @@ function genderLine(g) {
   return bits.length ? bits.join(' · ') : '—';
 }
 
-/** Present / Absent / Excused totals with percentages and gender groupings. */
-function AttendanceSummary({ totals, eligible }) {
-  const base = totals.marked || (totals.present + totals.absent + totals.excused) || 0;
+/** Present / Absent / Excused totals with percentages and gender groupings.
+ *  Unmarked members are treated as absent. */
+function AttendanceSummary({ totals }) {
+  const base = totals.eligible || totals.marked || 0;
   const cards = [
     { label: 'Present', count: totals.present, tone: 'green', gender: { male: totals.present_male, female: totals.present_female, unspecified: totals.present_unspecified }, hint: 'checked in at the service' },
-    { label: 'Absent', count: totals.absent, tone: 'red', gender: { male: totals.absent_male, female: totals.absent_female, unspecified: 0 }, hint: 'expected but not present' },
+    { label: 'Absent', count: totals.absent, tone: 'red', gender: { male: totals.absent_male, female: totals.absent_female, unspecified: totals.absent_unspecified }, hint: totals.unmarked ? `includes ${totals.unmarked} unmarked` : 'expected but not present' },
     { label: 'Excused', count: totals.excused, tone: 'blue', gender: { male: totals.excused_male, female: totals.excused_female, unspecified: 0 }, hint: 'let the church know' },
   ];
   return (
@@ -53,7 +54,8 @@ function AttendanceSummary({ totals, eligible }) {
         </div>
       ))}
       <p className='muted small' style={{ gridColumn: '1 / -1', margin: 0 }}>
-        Percentages are shares of recorded marks ({base} member{base === 1 ? '' : 's'}). Unmarked members are not a gender split.
+        Percentages are shares of the {base} active member{base === 1 ? '' : 's'} expected at this service.
+        Unmarked members are counted as absent.
       </p>
     </section>
   );
@@ -68,6 +70,7 @@ export default function AttendancePage() {
   const debounced = useDebounce(search);
   const [groupId, setGroupId] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [pageSize, setPageSize] = useState(50);
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -85,7 +88,7 @@ export default function AttendancePage() {
   }, [services]);
 
   const serviceId = searchParams.get('service') || '';
-  const roster = useRoster(serviceId, { search: debounced, groupId, status: statusFilter });
+  const roster = useRoster(serviceId, { search: debounced, groupId, status: statusFilter, pageSize });
   const rows = (roster.data && roster.data.rows) || [];
   const service = roster.data && roster.data.service;
   const closed = !!(service && (service.marking_closed ?? service.attendance_closed));
@@ -108,8 +111,6 @@ export default function AttendancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, edits]
   );
-
-  const markedCount = rows.filter((r) => effective(r).status).length;
 
   const setStatus = (row, status) => {
     setEdits((prev) => ({ ...prev, [row.member_id]: { ...effective(row), status } }));
@@ -140,6 +141,13 @@ export default function AttendancePage() {
     try {
       for (const id of dirtyIds) {
         const e = edits[id];
+        const row = rows.find((r) => r.member_id === id);
+        // "Unmarked means absent": clearing a status deletes the saved record.
+        if (!e.status && row && row.attendance_id) {
+          await api(`/attendance/${row.attendance_id}`, { method: 'DELETE' });
+          continue;
+        }
+        if (!e.status) continue;
         await api('/attendance', {
           method: 'POST',
           body: { serviceId: Number(serviceId), memberId: Number(id), status: e.status, notes: e.notes || '' },
@@ -199,7 +207,7 @@ export default function AttendancePage() {
       </div>
 
       {roster.data && roster.data.service && roster.data.service.totals && (
-        <AttendanceSummary totals={roster.data.service.totals} eligible={roster.data.totalEligible} />
+        <AttendanceSummary totals={roster.data.service.totals} />
       )}
 
       {saveError && !saving && <Alert variant='error' onClose={() => setSaveError(null)}>{saveError}</Alert>}
@@ -257,7 +265,7 @@ export default function AttendancePage() {
                   </button>
                 )}
                 {closed ? null : (
-                  <StatusButtons value={e.status || ''} onChange={(v) => setStatus(row, v)} ariaLabel={`Status for ${row.full_name}`} />
+                  <StatusButtons value={e.status || ''} onChange={(v) => setStatus(row, v)} ariaLabel={`Status for ${row.full_name}`} allowClear options={[['present', 'P'], ['excused', 'E']]} />
                 )}
               </li>
             );
@@ -265,9 +273,17 @@ export default function AttendancePage() {
         </ul>
       )}
 
+      {!roster.loading && !roster.error && roster.data && roster.data.totalEligible > rows.length && (
+        <div style={{ textAlign: 'center', margin: '14px 0 90px' }}>
+          <Button variant='secondary' onClick={() => setPageSize((s) => Math.min(200, s + 50))}>
+            Load more ({roster.data.totalEligible - rows.length} remaining)
+          </Button>
+        </div>
+      )}
+
       <footer className='save-bar' role='region' aria-label='Save attendance'>
         <div className='save-info'>
-          <Badge variant='info'>{markedCount}/{rows.length} marked</Badge>
+          <Badge variant='info'>{roster.data ? roster.data.markedCount : 0}/{roster.data ? roster.data.totalEligible : rows.length} marked</Badge>
           {dirtyIds.length > 0 ? <Badge variant='warning'>{dirtyIds.length} unsaved</Badge> : null}
           {roster.data && roster.data.lastUpdated && !dirtyIds.length && (
             <span className='muted small'>Last updated {timeAgo(roster.data.lastUpdated)}</span>

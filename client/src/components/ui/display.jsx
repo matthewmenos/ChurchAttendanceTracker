@@ -56,13 +56,11 @@ export function Tabs({ tabs, active, onChange, ariaLabel = 'Tabs' }) {
   );
 }
 
-/** Present / Absent / Excused segmented control (radiogroup semantics). */
-export function StatusButtons({ value, onChange, disabled, ariaLabel, size = '' }) {
-  const options = [
-    ['present', 'P'],
-    ['absent', 'A'],
-    ['excused', 'E'],
-  ];
+/** Present / Absent / Excused segmented control (radiogroup semantics).
+ *  Pass `options` to customise which statuses appear (default P/A/E).
+ *  When `allowClear` is on and a status is selected, clicking it again clears it
+ *  (e.g. "unmarked means absent" → a present/excused toggle that can be undone). */
+export function StatusButtons({ value, onChange, disabled, ariaLabel, size = '', allowClear = false, options = [['present', 'P'], ['absent', 'A'], ['excused', 'E']] }) {
   return (
     <div className={`seg ${size}`.trim()} role="radiogroup" aria-label={ariaLabel}>
       {options.map(([key, letter]) => (
@@ -72,10 +70,11 @@ export function StatusButtons({ value, onChange, disabled, ariaLabel, size = '' 
           role="radio"
           aria-checked={value === key}
           disabled={disabled}
-          className={`seg-btn seg-${key}${value === key ? ' active' : ''}`}
-          onClick={() => onChange(key)}
+          className={`seg-btn seg-${key}${value === key ? ' active' : ''}${allowClear && value === key ? ' active-clear' : ''}`}
+          onClick={() => onChange(allowClear && value === key ? '' : key)}
         >
           <span aria-hidden="true">{letter}</span>
+          <span className="seg-clear-dot" aria-hidden="true" />
           <span className="sr-only">
             {key.charAt(0).toUpperCase() + key.slice(1)}
           </span>

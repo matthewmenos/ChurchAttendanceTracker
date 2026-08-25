@@ -17,6 +17,7 @@ export default function UsherMarkPage() {
   const [search, setSearch] = useState('');
   const debounced = useDebounce(search);
   const [groupId, setGroupId] = useState('');
+  const [pageSize, setPageSize] = useState(50);
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -24,7 +25,7 @@ export default function UsherMarkPage() {
   const [noteDraft, setNoteDraft] = useState('');
 
   const groups = useFetch(() => api('/groups'), []);
-  const roster = useRoster(serviceId, { search: debounced, groupId });
+  const roster = useRoster(serviceId, { search: debounced, groupId, pageSize });
   const rows = (roster.data && roster.data.rows) || [];
   const service = roster.data && roster.data.service;
   const closed = !!(service && (service.marking_closed ?? service.attendance_closed));
@@ -44,8 +45,6 @@ export default function UsherMarkPage() {
       .map((r) => r.member_id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, edits]);
-
-  const markedCount = rows.filter((r) => effective(r).status).length;
 
   const setStatus = (row, status) => {
     setEdits((prev) => ({
@@ -75,6 +74,13 @@ export default function UsherMarkPage() {
     try {
       for (const id of dirtyIds) {
         const e = edits[id];
+        const row = rows.find((r) => r.member_id === id);
+        // "Unmarked means absent": clearing a status deletes the saved record.
+        if (!e.status && row && row.attendance_id) {
+          await api(`/attendance/${row.attendance_id}`, { method: 'DELETE' });
+          continue;
+        }
+        if (!e.status) continue;
         await api('/attendance', {
           method: 'POST',
           body: { serviceId: Number(serviceId), memberId: Number(id), status: e.status, notes: e.notes || '' },
@@ -132,6 +138,12 @@ export default function UsherMarkPage() {
         <EmptyState icon={<IconSearch size={44} />} title='No members match' message='Try a different search or group filter.' />
       )}
 
+      {!roster.loading && !roster.error && roster.data && roster.data.total > 0 && (
+        <p className='muted small' style={{ marginBottom: 8 }}>
+          Showing {rows.length} of {roster.data.total} members.
+        </p>
+      )}
+
       {rows.length > 0 && (
         <ul className='mark-list' aria-label='Member list'>
           {rows.map((row) => {
@@ -169,6 +181,8 @@ export default function UsherMarkPage() {
                     onChange={(v) => setStatus(row, v)}
                     ariaLabel={`Attendance status for ${row.full_name}`}
                     size='lg'
+                    allowClear
+                    options={[['present', 'P'], ['excused', 'E']]}
                   />
                 )}
               </li>
@@ -177,9 +191,17 @@ export default function UsherMarkPage() {
         </ul>
       )}
 
+      {!roster.loading && !roster.error && roster.data && roster.data.totalEligible > rows.length && (
+        <div style={{ textAlign: 'center', margin: '14px 0 90px' }}>
+          <Button variant='secondary' onClick={() => setPageSize((s) => Math.min(200, s + 50))}>
+            Load more ({roster.data.totalEligible - rows.length} remaining)
+          </Button>
+        </div>
+      )}
+
       <footer className='save-bar' role='region' aria-label='Save attendance'>
         <div className='save-info'>
-          <Badge variant='info'>{markedCount} of {rows.length} marked</Badge>
+          <Badge variant='info'>{(roster.data ? roster.data.markedCount : 0)} of {roster.data ? roster.data.totalEligible : rows.length} marked</Badge>
           {dirtyIds.length > 0 && <Badge variant='warning'>{dirtyIds.length} unsaved</Badge>}
           {saveError && <Alert variant='error'>{saveError}</Alert>}
         </div>
