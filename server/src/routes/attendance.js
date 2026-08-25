@@ -5,6 +5,13 @@ const { vStr, vInt, vEnum, vDate } = require('../utils/validate');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { recomputeMemberStats, getServiceTotals } = require('../services/stats');
 const { getSettingsMap } = require('../services/settings');
+const { syncFollowUpForMember } = require('../services/followups');
+
+/** Recompute a member's streak then auto-add them to follow-ups if needed. */
+async function recomputeMemberAndSync(db, memberId, userId) {
+  await recomputeMemberStats(db, memberId);
+  await syncFollowUpForMember(db, memberId, { createdBy: userId });
+}
 
 const router = express.Router();
 
@@ -226,7 +233,7 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
      RETURNING *`,
     [memberId, serviceId, status, notes, req.user.id]
   );
-  await recomputeMemberStats(db, memberId);
+  await recomputeMemberAndSync(db, memberId, req.user.id);
   res.status(201).json({ item: await recordById(rows[0].id) });
 }));
 
@@ -265,7 +272,7 @@ router.put('/:id', authenticate, asyncHandler(async (req, res) => {
     'UPDATE attendance SET status = $1, notes = $2, updated_by_user_id = $3 WHERE id = $4',
     [status, notes, req.user.id, id]
   );
-  await recomputeMemberStats(db, record.member_id);
+  await recomputeMemberAndSync(db, record.member_id, req.user.id);
   res.json({ item: await recordById(id) });
 }));
 
@@ -334,7 +341,7 @@ router.delete('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) 
   const svc = await serviceById(rows[0].service_id);
   if (isMarkingClosed(svc)) throw new ApiError(403, closedMessage(svc));
   await db.query('DELETE FROM attendance WHERE id = $1 RETURNING member_id', [id]);
-  await recomputeMemberStats(db, rows[0].member_id);
+  await recomputeMemberAndSync(db, rows[0].member_id, req.user.id);
   res.status(204).end();
 }));
 

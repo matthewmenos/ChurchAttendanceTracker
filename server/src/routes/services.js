@@ -4,6 +4,7 @@ const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vDate, vTime } = require('../utils/validate');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { getServiceTotals } = require('../services/stats');
+const { syncFollowUps } = require('../services/followups');
 
 const router = express.Router();
 
@@ -138,6 +139,8 @@ router.post('/:id/close', authenticate, requireAdmin, asyncHandler(async (req, r
     'UPDATE services SET attendance_closed = TRUE, attendance_closed_at = now(), attendance_closed_by = $1 WHERE id = $2',
     [req.user.id, id]
   );
+  // Finalise absences: auto-add members whose streak crossed the threshold.
+  await syncFollowUps(db, { createdBy: req.user.id });
   res.json({ service: withFlags(await serviceById(id)) });
 }));
 

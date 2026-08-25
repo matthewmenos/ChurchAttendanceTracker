@@ -3,6 +3,7 @@ const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vEnum, vDate } = require('../utils/validate');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { syncFollowUps } = require('../services/followups');
 
 const router = express.Router();
 router.use(authenticate, requireAdmin);
@@ -109,6 +110,16 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   const { rowCount } = await db.query('DELETE FROM follow_ups WHERE id = $1', [Number(req.params.id)]);
   if (!rowCount) throw new ApiError(404, 'Follow-up not found.');
   res.status(204).end();
+}));
+
+/** Scan all members and auto-create follow-ups for those past the threshold. */
+router.post('/sync', asyncHandler(async (req, res) => {
+  const result = await syncFollowUps(db, { createdBy: req.user.id });
+  res.json({
+    threshold: result.threshold,
+    disabled: result.disabled,
+    created: result.created,
+  });
 }));
 
 module.exports = router;

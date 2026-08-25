@@ -304,6 +304,56 @@ function NotificationsTab({ enabledInitial }) {
   );
 }
 
+function FollowupTab({ initial }) {
+  const toast = useToast();
+  const [syncing, setSyncing] = useState(false);
+
+  const sync = async () => {
+    setSyncing(true);
+    try {
+      const res = await api('/followups/sync', { method: 'POST' });
+      if (res.disabled) {
+        toast('Auto follow-up is disabled (threshold is 0). No members scanned.');
+      } else {
+        toast(`Follow-up scan complete. ${res.created.length} member(s) added to the list.`);
+      }
+    } catch (err) {
+      toast(err.message || 'Could not run the follow-up scan.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+
+  return (
+    <>
+      <SettingsForm
+        initial={initial}
+        endpoint='/settings'
+        fields={[
+          {
+            key: 'followup_absent_threshold',
+            type: 'number',
+            min: 0,
+            max: 52,
+            label: 'Auto follow-up after (consecutive absences)',
+            hint: 'Members absent this many consecutive services are added to the Follow-ups list automatically. Set to 0 to disable.',
+          },
+        ]}
+      />
+      <div className='card pad' style={{ marginTop: 16 }}>
+        <h2 className='card-title'>Scan members now</h2>
+        <p className='muted small'>
+          Run the check over every member immediately — useful right after changing the threshold or closing a service.
+        </p>
+        <div className='modal-actions' style={{ marginTop: 10 }}>
+          <Button loading={syncing} onClick={sync}>Sync follow-ups now</Button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function SettingsForm({ initial, fields, endpoint }) {
   const toast = useToast();
   const [values, setValues] = useState(initial || {});
@@ -496,6 +546,10 @@ export default function SettingsPage() {
     birthday_messages_enabled: s.birthday_messages_enabled !== 'false',
     birthday_message_template: s.birthday_message_template || '',
   };
+    const followupInitial = {
+    followup_absent_threshold:
+      s.followup_absent_threshold !== undefined ? Number(s.followup_absent_threshold) : 3,
+  };
 
   return (
     <div className='container'>
@@ -509,6 +563,7 @@ export default function SettingsPage() {
           { key: 'permissions', label: 'Usher permissions' },
           { key: 'birthdays', label: 'Birthdays' },
           { key: 'notifications', label: 'SMS notifications' },
+          { key: 'followups', label: 'Follow-ups' },
           { key: 'groups', label: 'Groups' },
           { key: 'locations', label: 'Locations' },
         ]}
@@ -550,6 +605,10 @@ export default function SettingsPage() {
 
       {tab === 'notifications' && (
         <NotificationsTab enabledInitial={s.notifications_enabled !== 'false'} />
+      )}
+
+      {tab === 'followups' && (
+        <FollowupTab initial={{ followup_absent_threshold: s.followup_absent_threshold !== undefined ? Number(s.followup_absent_threshold) : 3 }} />
       )}
 
       {tab === 'groups' && (

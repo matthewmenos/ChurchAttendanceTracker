@@ -59,6 +59,9 @@ router.put('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
     }
     updates.push(['visitor_thanks_template', tpl]);
   }
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'followup_absent_threshold')) {
+    updates.push(['followup_absent_threshold', String(vInt(req.body, 'followup_absent_threshold', { required: true, min: 0, max: 52, label: 'Follow-up absence threshold' }))]);
+  }
 
   for (const [key, value] of updates) {
     await db.query(
