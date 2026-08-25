@@ -6,7 +6,9 @@ import { Badge, PageHeader, Tabs } from '../../components/ui/display.jsx';
 import { Alert, EmptyState, ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
 import { Button, Checkbox, Field, Input, Select, Textarea } from '../../components/ui/forms.jsx';
 import { ConfirmDialog, Modal } from '../../components/ui/Modal.jsx';
-import { IconTag } from '../../components/ui/icons.jsx';
+import { Table } from '../../components/ui/Table.jsx';
+import { formatShortDate, formatTime, timeAgo } from '../../utils/format.js';
+import { IconTag, IconClipboardList } from '../../components/ui/icons.jsx';
 
 function BirthdayTab() {
   const toast = useToast();
@@ -74,6 +76,176 @@ function BirthdayTab() {
         </>
       )}
     </div>
+  );
+}
+
+function NotificationsTab({ enabledInitial }) {
+  const toast = useToast();
+  // ---- master switch (saved via /settings like the other tabs) ----
+  const [enabled, setEnabled] = useState(enabledInitial);
+  const [savingEnabled, setSavingEnabled] = useState(false);
+  const saveEnabled = async (next) => {
+    setSavingEnabled(true);
+    try {
+      await api('/settings', { method: 'PUT', body: { notifications_enabled: next } });
+      setEnabled(next);
+      toast(next ? 'SMS notifications turned on.' : 'SMS notifications turned off.');
+    } catch (err) {
+      toast(err.message || 'Could not save the setting.');
+    } finally {
+      setSavingEnabled(false);
+    }
+  };
+
+  // ---- composer state ----
+  const [message, setMessage] = useState('');
+  const [groupId, setGroupId] = useState('');
+  const [gender, setGender] = useState('');
+  const [audience, setAudience] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [lastRun, setLastRun] = useState(null);
+  const groupsQ = useFetch(() => api('/groups'), []);
+  const upcomingQ = useFetch(() => api('/notifications/upcoming-services'), []);
+  const historyQ = useFetch(() => api('/notifications/history', { params: { limit: 50 } }), []);
+
+  useEffect(() => {
+    let live = true;
+    api('/notifications/audience', { params: { groupId: groupId || undefined, gender: gender || undefined } })
+      .then((d) => { if (live) setAudience(d); })
+      .catch(() => { if (live) setAudience(null); });
+    return () => { live = false; };
+  }, [groupId, gender]);
+
+  const applyServiceReminder = (serviceId) => {
+    const s = ((upcomingQ.data && upcomingQ.data.items) || []).find((x) => String(x.id) === String(serviceId));
+    if (!s) return;
+    const t = s.start_time ? ` at ${formatTime(s.start_time)}` : '';
+    setMessage(`Hi {{first_name}}! Reminder: ${s.service_name} holds on ${formatShortDate(s.service_date)}${t}. Come along and bring someone. — {{church_name}}`);
+  };
+
+  const send = async () => {
+    setSending(true);
+    try {
+      const summary = await api('/notifications/send', {
+        method: 'POST',
+        body: { message, groupId: groupId || undefined, gender: gender || undefined },
+      });
+      setLastRun(summary);
+      if (summary.providerConfigured && summary.enabled) {
+        toast(`SMS run complete: ${summary.sent} sent${summary.failed ? `, ${summary.failed} failed` : ''}.`);
+      } else {
+        toast(`Dry-run: ${summary.total} recipient(s) computed. Nothing delivered.`);
+      }
+      await historyQ.reload();
+      setConfirmOpen(false);
+    } catch (err) {
+      toast(err.message || 'Could not send the notification.');
+      setConfirmOpen(false);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const count = audience ? audience.count : null;
+  return (
+    <>
+      <div className='card pad'>
+        <h2 className='card-title'>SMS notifications</h2>
+        <Checkbox
+          id='notifications_enabled'
+          checked={enabled}
+          onChange={(e) => saveEnabled(e.target.checked)}
+          label='Enable SMS activity notifications'
+        />
+        <p className='field-hint'>
+          Master switch for member SMS announcements and reminders. Birthday messages have their own toggle on the Birthdays tab.
+          {audience && (audience.providerConfigured
+            ? ' Arkasel is configured — messages will be delivered.'
+            : ' Arkasel is NOT configured — sends run in dry-run mode only.')}
+          {savingEnabled ? ' Saving…' : ''}
+        </p>
+      </div>
+
+      <div className='card pad' style={{ marginTop: 16 }}>
+        <h2 className='card-title'>New announcement</h2>
+        <Field label='Start from an upcoming service (optional)' id='nt-service' hint='Fills a ready-made reminder you can edit.'>
+          <Select id='nt-service' value='' onChange={(e) => applyServiceReminder(e.target.value)}>
+            <option value=''>Choose a service…</option>
+            {((upcomingQ.data && upcomingQ.data.items) || []).map((s) => (
+              <option key={s.id} value={s.id}>{s.service_name} · {formatShortDate(s.service_date)}</option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field label='Message' id='nt-message' hint={`Use {{first_name}}, {{full_name}}, {{church_name}}. ${count === null ? 'Counting recipients…' : `Will be sent to ${count} member(s) with a phone number.`}`}>
+          <Textarea id='nt-message' rows={4} maxLength={480} value={message} onChange={(e) => setMessage(e.target.value)} placeholder='Write your announcement…' />
+        </Field>
+
+        <div className='field-row'>
+          <Field label='Send to group' id='nt-group'>
+            <Select id='nt-group' value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+              <option value=''>All groups</option>
+              {((groupsQ.data && groupsQ.data.items) || []).map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label='Gender' id='nt-gender'>
+            <Select id='nt-gender' value={gender} onChange={(e) => setGender(e.target.value)}>
+              <option value=''>Everyone</option>
+              <option value='male'>Male only</option>
+              <option value='female'>Female only</option>
+            </Select>
+          </Field>
+        </div>
+
+        <div className='modal-actions'>
+          <Button variant='secondary' onClick={() => setMessage('')}>Clear</Button>
+          <Button onClick={() => setConfirmOpen(true)} disabled={!message.trim() || !count}>Send to {count ?? '…'} members</Button>
+        </div>
+        {lastRun && (
+          <p className='muted small'>
+            Last run: total {lastRun.total} · sent {lastRun.sent} · failed {lastRun.failed}
+            {!lastRun.enabled || !lastRun.providerConfigured ? ' · dry-run (nothing delivered)' : ''}
+          </p>
+        )}
+      </div>
+
+      <div className='card' style={{ marginTop: 16 }} aria-label='SMS history'>
+        <h2 className='card-title pad-inline'>Recent SMS history</h2>
+        {historyQ.loading && <LoadingBlock />}
+        {historyQ.error && <div className='pad-inline'><ErrorState error={historyQ.error} onRetry={historyQ.reload} /></div>}
+        {!historyQ.loading && !historyQ.error && ((historyQ.data && historyQ.data.items) || []).length === 0 && (
+          <EmptyState icon={<IconClipboardList size={44} />} title='No SMS sent yet' message='Announcements and reminders you send will appear here with their delivery status.' />
+        )}
+        {((historyQ.data && historyQ.data.items) || []).length > 0 && (
+          <Table
+            caption='Recently sent SMS notifications'
+            rows={(historyQ.data && historyQ.data.items) || []}
+            getRowKey={(r) => r.id}
+            columns={[
+              { key: 'created_at', label: 'When', render: (r) => timeAgo(r.created_at) },
+              { key: 'member_name', label: 'Member' },
+              { key: 'phone', label: 'Phone' },
+              { key: 'category', label: 'Type', render: (r) => <Badge variant='neutral'>{r.category}</Badge> },
+              { key: 'message', label: 'Message', render: (r) => <span title={r.message}>{r.message.length > 60 ? `${r.message.slice(0, 60)}…` : r.message}</span> },
+              { key: 'status', label: 'Status', render: (r) => <Badge variant={r.status === 'sent' ? 'info' : 'high'}>{r.status}</Badge> },
+            ]}
+          />
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title='Send this SMS?'
+        message={`This will message ${count ?? 0} member(s) via Arkasel${audience && !audience.providerConfigured ? ' — currently in DRY-RUN mode, nothing will actually be delivered' : ''}.`}
+        confirmLabel='Send now'
+        loading={sending}
+        onConfirm={send}
+        onCancel={() => setConfirmOpen(false)}
+      />
+    </>
   );
 }
 
@@ -281,6 +453,7 @@ export default function SettingsPage() {
           { key: 'general', label: 'General' },
           { key: 'permissions', label: 'Usher permissions' },
           { key: 'birthdays', label: 'Birthdays' },
+          { key: 'notifications', label: 'SMS notifications' },
           { key: 'groups', label: 'Groups' },
           { key: 'locations', label: 'Locations' },
         ]}
@@ -318,6 +491,10 @@ export default function SettingsPage() {
           />
           <BirthdayTab />
         </>
+      )}
+
+      {tab === 'notifications' && (
+        <NotificationsTab enabledInitial={s.notifications_enabled !== 'false'} />
       )}
 
       {tab === 'groups' && (

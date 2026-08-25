@@ -4,6 +4,7 @@ const PUBLIC_KEYS = [
   'usher_correction_window_minutes',
   'show_member_contacts_to_ushers',
   'birthday_messages_enabled',
+  'notifications_enabled',
 ];
 
 async function getSettingsMap(db) {

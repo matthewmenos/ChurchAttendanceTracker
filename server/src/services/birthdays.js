@@ -1,5 +1,4 @@
 const db = require('../config/db');
-const env = require('../config/env');
 const { getSettingsMap } = require('./settings');
 
 /** Whole years between birthday and the given day. */
@@ -42,26 +41,10 @@ async function getTodaysBirthdays(today = new Date()) {
 }
 
 /**
- * Arkasel HTTP SMS contract (configurable via env):
- *   POST {ARKASEL_ENDPOINT}
- *   Headers: {Content-Type: application/json,
- *             <ARKASEL_AUTH_HEADER>: <ARKASEL_AUTH_SCHEME><ARKASEL_API_KEY>}
- *   Body:    {sender, to, message}
- * A 2xx response counts as delivered. Adjust ARKASEL_AUTH_HEADER /
- * ARKASEL_AUTH_SCHEME if the gateway expects a different auth style.
+ * Arkasel delivery is shared with the activity-notification system
+ * (services/sms.js). Birthday messages use the same gateway and env config.
  */
-async function sendViaArkasel(phone, message) {
-  const { endpoint, apiKey, senderId, authHeader, authScheme } = env.arkasel;
-  const headers = { 'Content-Type': 'application/json' };
-  if (apiKey) headers[authHeader] = `${authScheme}${apiKey}`;
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ sender: senderId, to: phone, message }),
-  });
-  const response = (await res.text().catch(() => '')).slice(0, 500);
-  return { ok: res.ok, status: res.status, response };
-}
+const { sendViaArkasel, isArkaselConfigured } = require('./sms');
 
 async function recordBirthdayMessage({ memberId, year, phone, message, status, providerResponse }) {
   await db.query(
@@ -88,7 +71,7 @@ async function runBirthdayJob({ today = new Date(), force = false } = {}) {
   const enabled = settings.birthday_messages_enabled === 'true';
   const template = settings.birthday_message_template || 'Happy birthday {{first_name}}!';
   const churchName = settings.church_name || '';
-  const providerConfigured = Boolean(env.arkasel.endpoint && env.arkasel.apiKey);
+  const providerConfigured = isArkaselConfigured();
 
   const members = await getTodaysBirthdays(today);
   const year = today.getFullYear();
@@ -159,7 +142,7 @@ async function getBirthdayPreview(today = new Date()) {
   return {
     date: today.toISOString().slice(0, 10),
     enabled: settings.birthday_messages_enabled === 'true',
-    providerConfigured: Boolean(env.arkasel.endpoint && env.arkasel.apiKey),
+    providerConfigured: isArkaselConfigured(),
     members: members.map((m) => ({
       id: m.id,
       full_name: m.full_name,

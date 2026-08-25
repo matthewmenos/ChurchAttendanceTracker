@@ -46,6 +46,9 @@ router.put('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
     }
     updates.push(['birthday_message_template', tpl]);
   }
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'notifications_enabled')) {
+    updates.push(['notifications_enabled', String(vBool(req.body, 'notifications_enabled', { required: true }))]);
+  }
 
   for (const [key, value] of updates) {
     await db.query(

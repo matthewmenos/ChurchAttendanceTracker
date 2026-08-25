@@ -39,6 +39,7 @@ router.use('/groups', require('./groups'));
 router.use('/locations', require('./locations'));
 router.use('/followups', require('./followups'));
 router.use('/birthdays', require('./birthdays'));
+router.use('/notifications', require('./notifications'));
 router.use('/reports', require('./reports'));
 router.use('/settings', require('./settings'));
 
