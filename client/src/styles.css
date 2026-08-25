@@ -172,6 +172,16 @@ select.input { appearance: auto; }
 .password-toggle:hover { color: var(--blue-700); background: var(--blue-50); }
 .password-toggle:focus-visible { outline: 2px solid var(--blue-600); outline-offset: 1px; color: var(--blue-700); }
 
+/* ---------------- print (per-service report) ---------------- */
+@media print {
+  .sidebar, .topbar, .no-print, .backdrop { display: none !important; }
+  .admin-shell, .admin-main-wrap { display: block !important; }
+  .admin-main { padding: 0 !important; }
+  .container.wide { max-width: none; }
+  .card { box-shadow: none !important; border: 1px solid #ddd; break-inside: avoid; }
+  .btn { display: none !important; }
+}
+
 /* ---------------- badges & avatars ---------------- */
 .badge {
   display: inline-flex; align-items: center; gap: 4px;

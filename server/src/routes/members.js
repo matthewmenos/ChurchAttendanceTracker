@@ -16,6 +16,7 @@ function cleanMember(m) {
     email: m.email,
     phone: m.phone,
     birthday: m.birthday || null,
+    gender: m.gender || null,
     groups,
     group_ids: groups.map((g) => g.id),
     status: m.status,
@@ -74,6 +75,7 @@ async function setMemberGroups(memberId, groupIds) {
 router.get('/', asyncHandler(async (req, res) => {
   const search = vStr(req.query, 'search', { max: 100 }) || '';
   const status = vEnum(req.query, 'status', ['active', 'inactive', 'all']) || 'all';
+  const gender = vEnum(req.query, 'gender', ['male', 'female', 'all']) || 'all';
   const groupId = vInt(req.query, 'groupId');
   const page = Math.max(1, vInt(req.query, 'page') || 1);
   const pageSize = Math.min(1000, Math.max(1, vInt(req.query, 'pageSize') || 20));
@@ -88,6 +90,10 @@ router.get('/', asyncHandler(async (req, res) => {
   if (status !== 'all') {
     params.push(status);
     where.push(`m.status = $${params.length}`);
+  }
+  if (gender !== 'all') {
+    params.push(gender);
+    where.push(`m.gender = $${params.length}`);
   }
   if (groupId) {
     params.push(groupId);
@@ -119,16 +125,17 @@ router.post('/', asyncHandler(async (req, res) => {
   const email = vEmail(req.body, 'email');
   const phone = vStr(req.body, 'phone', { max: 40 });
   const birthday = vDate(req.body, 'birthday');
+  const gender = vEnum(req.body, 'gender', ['male', 'female'], { label: 'Gender' });
   const groupIds = await ensureGroups(readGroupIds(req.body));
   const status = vEnum(req.body, 'status', ['active', 'inactive']) || 'active';
   const notes = vStr(req.body, 'notes', { max: 1000 });
 
   try {
     const { rows } = await db.query(
-      `INSERT INTO members (full_name, email, phone, birthday, status, notes)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO members (full_name, email, phone, birthday, gender, status, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [fullName, email, phone, birthday, status, notes]
+      [fullName, email, phone, birthday, gender, status, notes]
     );
     await setMemberGroups(rows[0].id, groupIds);
     res.status(201).json({ member: cleanMember(await findMember(rows[0].id)) });
@@ -153,6 +160,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const email = vEmail(req.body, 'email');
   const phone = vStr(req.body, 'phone', { max: 40 });
   const birthday = vDate(req.body, 'birthday');
+  const gender = vEnum(req.body, 'gender', ['male', 'female'], { label: 'Gender' });
   const groupIds = await ensureGroups(readGroupIds(req.body));
   const status = vEnum(req.body, 'status', ['active', 'inactive']) || existing.status;
   const notes = vStr(req.body, 'notes', { max: 1000 });
@@ -160,9 +168,9 @@ router.put('/:id', asyncHandler(async (req, res) => {
   try {
     await db.query(
       `UPDATE members
-          SET full_name = $1, email = $2, phone = $3, birthday = $4, status = $5, notes = $6
-        WHERE id = $7`,
-      [fullName, email, phone, birthday, status, notes, id]
+          SET full_name = $1, email = $2, phone = $3, birthday = $4, gender = $5, status = $6, notes = $7
+        WHERE id = $8`,
+      [fullName, email, phone, birthday, gender, status, notes, id]
     );
     await setMemberGroups(id, groupIds);
     res.json({ member: cleanMember(await findMember(id)) });

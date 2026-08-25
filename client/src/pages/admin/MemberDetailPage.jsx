@@ -73,6 +73,7 @@ export default function MemberDetailPage() {
           <h1>{member.full_name}</h1>
           <div className='badge-row'>
             <Badge variant={member.status}>{member.status === 'active' ? 'Active' : 'Inactive'}</Badge>
+            {member.gender && <Badge variant='neutral'>{member.gender === 'male' ? 'Male' : 'Female'}</Badge>}
             {(member.groups || []).map((g) => <Badge key={g.id} variant='info'>{g.name}</Badge>)}
             {member.consecutive_absences >= 3 && <Badge variant='high'>{member.consecutive_absences} weeks absent <IconTriangleAlert size={11} /></Badge>}
           </div>

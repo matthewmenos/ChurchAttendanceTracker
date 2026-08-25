@@ -45,20 +45,36 @@ async function recomputeMemberStats(db, memberId) {
 
 async function getServiceTotals(db, serviceId) {
   const { rows } = await db.query(
-    `SELECT COUNT(*) FILTER (WHERE status = 'present') AS present,
-            COUNT(*) FILTER (WHERE status = 'absent')  AS absent,
-            COUNT(*) FILTER (WHERE status = 'excused') AS excused,
-            COUNT(*) AS marked
-       FROM attendance
-      WHERE service_id = $1`,
+    `SELECT COUNT(*) FILTER (WHERE a.status = 'present') AS present,
+            COUNT(*) FILTER (WHERE a.status = 'absent')  AS absent,
+            COUNT(*) FILTER (WHERE a.status = 'excused') AS excused,
+            COUNT(*) AS marked,
+            COUNT(*) FILTER (WHERE a.status = 'present' AND m.gender = 'male')   AS present_male,
+            COUNT(*) FILTER (WHERE a.status = 'present' AND m.gender = 'female') AS present_female,
+            COUNT(*) FILTER (WHERE a.status = 'present' AND m.gender IS NULL)    AS present_unspecified,
+            COUNT(*) FILTER (WHERE a.status = 'absent' AND m.gender = 'male')    AS absent_male,
+            COUNT(*) FILTER (WHERE a.status = 'absent' AND m.gender = 'female')  AS absent_female,
+            COUNT(*) FILTER (WHERE a.status = 'excused' AND m.gender = 'male')   AS excused_male,
+            COUNT(*) FILTER (WHERE a.status = 'excused' AND m.gender = 'female') AS excused_female
+       FROM attendance a
+       JOIN members m ON m.id = a.member_id
+      WHERE a.service_id = $1`,
     [serviceId]
   );
   const r = rows[0];
+  const num = (v) => Number(v);
   return {
-    present: Number(r.present),
-    absent: Number(r.absent),
-    excused: Number(r.excused),
-    marked: Number(r.marked),
+    present: num(r.present),
+    absent: num(r.absent),
+    excused: num(r.excused),
+    marked: num(r.marked),
+    present_male: num(r.present_male),
+    present_female: num(r.present_female),
+    present_unspecified: num(r.present_unspecified),
+    absent_male: num(r.absent_male),
+    absent_female: num(r.absent_female),
+    excused_male: num(r.excused_male),
+    excused_female: num(r.excused_female),
   };
 }
 

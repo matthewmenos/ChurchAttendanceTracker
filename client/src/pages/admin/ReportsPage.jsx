@@ -72,8 +72,8 @@ export default function ReportsPage() {
     const res = await api('/members', { params: { pageSize: 1000 } });
     downloadCsv(
       'members.csv',
-      ['Name', 'Email', 'Phone', 'Group', 'Status', 'Last attended', 'Consecutive absences'],
-      res.items.map((m) => [m.full_name, m.email || '', m.phone || '', m.group_name || '', m.status, m.last_attended || '', m.consecutive_absences])
+      ['Name', 'Email', 'Phone', 'Gender', 'Group', 'Status', 'Last attended', 'Consecutive absences'],
+      res.items.map((m) => [m.full_name, m.email || '', m.phone || '', m.gender || '', m.group_name || '', m.status, m.last_attended || '', m.consecutive_absences])
     );
   };
 
@@ -102,7 +102,7 @@ export default function ReportsPage() {
       </div>
 
       <section className='stat-grid stat-grid-4' aria-label='Totals'>
-        <StatCard tone='green' label='Present' value={String(totals.present)} sub='member records' />
+        <StatCard tone='green' label='Present' value={String(totals.present)} sub={`${totals.present_male || 0} male · ${totals.present_female || 0} female`} />
         <StatCard tone='red' label='Absent' value={String(totals.absent)} sub='member records' />
         <StatCard tone='blue' label='Excused' value={String(totals.excused)} sub='member records' />
         <StatCard tone='yellow' label='Services in range' value={String(byService.length)} />
@@ -126,6 +126,8 @@ export default function ReportsPage() {
               { key: 'service_date', label: 'Date', render: (r) => formatShortDate(r.service_date) },
               { key: 'service_name', label: 'Service', render: (r) => <Link to={`/admin/services/${r.id}`}>{r.service_name}</Link> },
               { key: 'present', label: 'Present', className: 'num' },
+              { key: 'present_male', label: 'Male', className: 'num', render: (r) => String(r.present_male ?? 0) },
+              { key: 'present_female', label: 'Female', className: 'num', render: (r) => String(r.present_female ?? 0) },
               { key: 'absent', label: 'Absent', className: 'num' },
               { key: 'excused', label: 'Excused', className: 'num' },
               { key: 'total_headcount', label: 'Headcount', className: 'num' },

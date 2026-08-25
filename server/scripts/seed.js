@@ -90,50 +90,51 @@ async function main() {
   }
 
   // ---------- members ----------
-  // [full name, group or null, hasEmail]
+  // [full name, group or null, hasEmail, gender]
   const memberDefs = [
-    ['Abigail Mensah', 'Choir', true],
-    ['Benjamin Osei', "Men's Fellowship", true],
-    ['Chidinma Okafor', 'Youth Fellowship', true],
-    ['David Ampofo', 'Ushering Department', false],
-    ['Esther Boateng', "Women's Fellowship", true],
-    ['Felix Nkrumah', 'Youth Fellowship', false],
-    ['Grace Appiah', 'Choir', true],
-    ['Henry Owusu', "Men's Fellowship", false],
-    ['Irene Danso', "Children's Ministry", true],
-    ['James Quaye', 'Ushering Department', false],
-    ['Comfort Asante', "Women's Fellowship", true],
-    ['Kwame Sarpong', 'Youth Fellowship', false],
-    ['Lydia Addo', 'Choir', true],
-    ['Michael Tetteh', "Men's Fellowship", false],
-    ['Nana Adjei', 'Youth Fellowship', true],
-    ['Obiageli Eze', "Women's Fellowship", false],
-    ['Peter Antwi', 'Ushering Department', true],
-    ['Rebecca Owusuaa', "Children's Ministry", false],
-    ['Samuel Frimpong', "Men's Fellowship", true],
-    ['Theresa Nyarko', "Women's Fellowship", false],
-    ['Uche Nwachukwu', 'Youth Fellowship', false],
-    ['Victoria Lamptey', 'Choir', true],
-    ['William Darko', 'Ushering Department', false],
-    ['Yaa Konadu', "Women's Fellowship", true],
-    ['Zachary Boadi', 'Youth Fellowship', false],
-    ['Priscilla Agyeman', "Children's Ministry", true],
-    ['Joseph Mensimah', "Men's Fellowship", false],
-    ['Deborah Cudjoe', 'Choir', false],
+    ['Abigail Mensah', 'Choir', true, 'female'],
+    ['Benjamin Osei', "Men's Fellowship", true, 'male'],
+    ['Chidinma Okafor', 'Youth Fellowship', true, 'female'],
+    ['David Ampofo', 'Ushering Department', false, 'male'],
+    ['Esther Boateng', "Women's Fellowship", true, 'female'],
+    ['Felix Nkrumah', 'Youth Fellowship', false, 'male'],
+    ['Grace Appiah', 'Choir', true, 'female'],
+    ['Henry Owusu', "Men's Fellowship", false, 'male'],
+    ['Irene Danso', "Children's Ministry", true, 'female'],
+    ['James Quaye', 'Ushering Department', false, 'male'],
+    ['Comfort Asante', "Women's Fellowship", true, 'female'],
+    ['Kwame Sarpong', 'Youth Fellowship', false, 'male'],
+    ['Lydia Addo', 'Choir', true, 'female'],
+    ['Michael Tetteh', "Men's Fellowship", false, 'male'],
+    ['Nana Adjei', 'Youth Fellowship', true, 'male'],
+    ['Obiageli Eze', "Women's Fellowship", false, 'female'],
+    ['Peter Antwi', 'Ushering Department', true, 'male'],
+    ['Rebecca Owusuaa', "Children's Ministry", false, 'female'],
+    ['Samuel Frimpong', "Men's Fellowship", true, 'male'],
+    ['Theresa Nyarko', "Women's Fellowship", false, 'female'],
+    ['Uche Nwachukwu', 'Youth Fellowship', false, 'male'],
+    ['Victoria Lamptey', 'Choir', true, 'female'],
+    ['William Darko', 'Ushering Department', false, 'male'],
+    ['Yaa Konadu', "Women's Fellowship", true, 'female'],
+    ['Zachary Boadi', 'Youth Fellowship', false, 'male'],
+    ['Priscilla Agyeman', "Children's Ministry", true, 'female'],
+    ['Joseph Mensimah', "Men's Fellowship", false, 'male'],
+    ['Deborah Cudjoe', 'Choir', false, 'female'],
   ];
 
   const memberIds = [];
   let phoneSeq = 101;
   const today = new Date();
-  for (const [fullName, groupName, hasEmail] of memberDefs) {
+  for (const [fullName, groupName, hasEmail, gender] of memberDefs) {
     const slug = fullName.toLowerCase().replace(/[^a-z ]/g, '').split(/ +/).join('.');
     const { rows } = await db.query(
-      `INSERT INTO members (full_name, email, phone)
-       VALUES ($1, $2, $3) RETURNING id`,
+      `INSERT INTO members (full_name, email, phone, gender)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
       [
         fullName,
         hasEmail ? `${slug}@example.com` : null,
         `+1 555-01${phoneSeq++}`,
+        gender,
       ]
     );
     const memberId = rows[0].id;

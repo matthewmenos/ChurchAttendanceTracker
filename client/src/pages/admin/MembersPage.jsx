@@ -13,13 +13,14 @@ import { Pagination, Table } from '../../components/ui/Table.jsx';
 import { formatShortDate } from '../../utils/format.js';
 import { IconUsers, IconTriangleAlert } from '../../components/ui/icons.jsx';
 
-const EMPTY_FORM = { fullName: '', email: '', phone: '', groupIds: [], birthday: '', status: 'active', notes: '' };
+const EMPTY_FORM = { fullName: '', email: '', phone: '', groupIds: [], birthday: '', gender: '', status: 'active', notes: '' };
 
 export default function MembersPage() {
   const toast = useToast();
   const [search, setSearch] = useState('');
   const debounced = useDebounce(search);
   const [status, setStatus] = useState('all');
+  const [gender, setGender] = useState('');
   const [groupId, setGroupId] = useState('');
   const [page, setPage] = useState(1);
   const [formOpen, setFormOpen] = useState(false);
@@ -35,8 +36,8 @@ export default function MembersPage() {
 
   const groupsQ = useFetch(() => api('/groups'), []);
   const listQ = useFetch(
-    () => api('/members', { params: { search: debounced, status, groupId, page, pageSize: 12 } }),
-    [debounced, status, groupId, page]
+    () => api('/members', { params: { search: debounced, status, gender: gender || undefined, groupId, page, pageSize: 12 } }),
+    [debounced, status, gender, groupId, page]
   );
   const items = (listQ.data && listQ.data.items) || [];
   const total = (listQ.data && listQ.data.total) || 0;
@@ -62,6 +63,7 @@ export default function MembersPage() {
       phone: form.get('phone'),
       groupIds: form.getAll('groupIds').map(Number),
       birthday: form.get('birthday') || null,
+      gender: form.get('gender') || null,
       status: form.get('status') || undefined,
       notes: form.get('notes'),
     };
@@ -122,8 +124,13 @@ export default function MembersPage() {
             <option key={g.id} value={g.id}>{g.name}</option>
           ))}
         </Select>
-        {(search || status !== 'all' || groupId) ? (
-          <button type='button' className='btn btn-ghost btn-sm' onClick={() => { setSearch(''); setStatus('all'); setGroupId(''); setPage(1); }}>
+        <Select value={gender} onChange={(e) => { setGender(e.target.value); setPage(1); }} aria-label='Filter by gender' className='select-fit'>
+          <option value=''>All genders</option>
+          <option value='male'>Male</option>
+          <option value='female'>Female</option>
+        </Select>
+        {(search || status !== 'all' || gender || groupId) ? (
+          <button type='button' className='btn btn-ghost btn-sm' onClick={() => { setSearch(''); setStatus('all'); setGender(''); setGroupId(''); setPage(1); }}>
             Clear filters
           </button>
         ) : null}
@@ -161,6 +168,7 @@ export default function MembersPage() {
                   : '—'
               ) },
               { key: 'phone', label: 'Phone', render: (m) => m.phone || '—' },
+              { key: 'gender', label: 'Gender', render: (m) => (m.gender ? <Badge variant='neutral'>{m.gender === 'male' ? 'Male' : 'Female'}</Badge> : '—') },
               { key: 'status', label: 'Status', render: (m) => <Badge variant={m.status}>{m.status === 'active' ? 'Active' : 'Inactive'}</Badge> },
               { key: 'last_attended', label: 'Last attended', render: (m) => (m.last_attended ? formatShortDate(m.last_attended) : 'Never') },
               {
@@ -225,6 +233,15 @@ export default function MembersPage() {
             <Field label='Birthday' id='m-birthday' hint='Used for the birthday message.'>
               <Input id='m-birthday' name='birthday' type='date' defaultValue={editing ? editing.birthday || '' : ''} />
             </Field>
+            <Field label='Gender' id='m-gender'>
+              <Select id='m-gender' name='gender' defaultValue={editing ? editing.gender || '' : ''}>
+                <option value=''>Not specified</option>
+                <option value='male'>Male</option>
+                <option value='female'>Female</option>
+              </Select>
+            </Field>
+          </div>
+          <div className='field-row'>
             <Field label='Status' id='m-status'>
               <Select id='m-status' name='status' defaultValue={editing ? editing.status : 'active'}>
                 <option value='active'>Active</option>

@@ -15,13 +15,16 @@ function todayStr() {
 
 const SERVICE_COUNTS_JOIN = `
   LEFT JOIN (
-    SELECT service_id,
-           COUNT(*) FILTER (WHERE status = 'present') AS present,
-           COUNT(*) FILTER (WHERE status = 'absent')  AS absent,
-           COUNT(*) FILTER (WHERE status = 'excused') AS excused,
-           COUNT(*) AS marked
-      FROM attendance
-    GROUP BY service_id
+    SELECT a.service_id,
+           COUNT(*) FILTER (WHERE a.status = 'present') AS present,
+           COUNT(*) FILTER (WHERE a.status = 'absent')  AS absent,
+           COUNT(*) FILTER (WHERE a.status = 'excused') AS excused,
+           COUNT(*) AS marked,
+           COUNT(*) FILTER (WHERE a.status = 'present' AND m.gender = 'male')   AS present_male,
+           COUNT(*) FILTER (WHERE a.status = 'present' AND m.gender = 'female') AS present_female
+      FROM attendance a
+      JOIN members m ON m.id = a.member_id
+     GROUP BY a.service_id
   ) a ON a.service_id = s.id`;
 
 /** Everything the admin Overview page needs in one round-trip. */
@@ -138,7 +141,9 @@ router.get('/summary', asyncHandler(async (req, res) => {
     SELECT s.id, s.service_date, s.service_name, s.total_headcount, l.name AS location_name,
             COALESCE(a.present, 0)::int AS present,
             COALESCE(a.absent, 0)::int  AS absent,
-            COALESCE(a.excused, 0)::int AS excused
+            COALESCE(a.excused, 0)::int AS excused,
+            COALESCE(a.present_male, 0)::int   AS present_male,
+            COALESCE(a.present_female, 0)::int AS present_female
        FROM services s
        LEFT JOIN locations l ON l.id = s.location_id ${SERVICE_COUNTS_JOIN}
       WHERE s.service_date BETWEEN $1 AND $2
@@ -149,8 +154,10 @@ router.get('/summary', asyncHandler(async (req, res) => {
       present: acc.present + r.present,
       absent: acc.absent + r.absent,
       excused: acc.excused + r.excused,
+      present_male: acc.present_male + r.present_male,
+      present_female: acc.present_female + r.present_female,
     }),
-    { present: 0, absent: 0, excused: 0 }
+    { present: 0, absent: 0, excused: 0, present_male: 0, present_female: 0 }
   );
 
   const groupQuery = `

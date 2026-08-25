@@ -4,9 +4,10 @@ import useFetch from '../../hooks/useFetch.js';
 import { api } from '../../api/client.js';
 import { Badge, PageHeader, StatCard, StatusBadge } from '../../components/ui/display.jsx';
 import { EmptyState, ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
+import { Button } from '../../components/ui/forms.jsx';
 import { Table } from '../../components/ui/Table.jsx';
 import { formatDate, formatDateTime, formatTime } from '../../utils/format.js';
-import { IconChevronLeft, IconFileText } from '../../components/ui/icons.jsx';
+import { IconChevronLeft, IconFileText, IconPrinter } from '../../components/ui/icons.jsx';
 
 export default function ServiceDetailPage() {
   const { id } = useParams();
@@ -22,22 +23,28 @@ export default function ServiceDetailPage() {
 
   const service = (detail.data && detail.data.service) || {};
   const items = (attendance.data && attendance.data.items) || [];
-  const totals = (attendance.data && attendance.data.totals) || { present: 0, absent: 0, excused: 0, marked: 0 };
+  const totals = (attendance.data && attendance.data.totals)
+    || { present: 0, absent: 0, excused: 0, marked: 0, present_male: 0, present_female: 0 };
 
   return (
     <div className='container wide'>
-      <Link to='/admin/services' className='link-btn back-link'><IconChevronLeft size={14} /> Back to services</Link>
+      <Link to='/admin/services' className='link-btn back-link no-print'><IconChevronLeft size={14} /> Back to services</Link>
 
       <PageHeader
         title={service.service_name}
         subtitle={`${formatDate(service.service_date)}${service.start_time ? ` · ${formatTime(service.start_time)}` : ''}${service.location_name ? ` · ${service.location_name}` : ''}`}
-        actions={<Link className='btn btn-primary' to={`/admin/attendance?service=${service.id}`}>Take / edit attendance</Link>}
+        actions={(
+          <>
+            <Button variant='secondary' onClick={() => window.print()}><IconPrinter size={16} /> Print report</Button>
+            <Link className='btn btn-primary no-print' to={`/admin/attendance?service=${service.id}`}>Take / edit attendance</Link>
+          </>
+        )}
       />
 
       <section className='stat-grid stat-grid-4' aria-label='Attendance totals'>
-        <StatCard tone='green' label='Present' value={String(totals.present)} />
-        <StatCard tone='red' label='Absent' value={String(totals.absent)} />
-        <StatCard tone='blue' label='Excused' value={String(totals.excused)} />
+        <StatCard tone='green' label='Present' value={String(totals.present)} sub={`${totals.present_male || 0} male · ${totals.present_female || 0} female`} />
+        <StatCard tone='red' label='Absent' value={String(totals.absent)} sub={`${totals.absent_male || 0} male · ${totals.absent_female || 0} female`} />
+        <StatCard tone='blue' label='Excused' value={String(totals.excused)} sub={`${totals.excused_male || 0} male · ${totals.excused_female || 0} female`} />
         <StatCard tone='yellow' label='Reported headcount' value={String(service.total_headcount ?? 0)} sub={`${totals.marked} members marked`} />
       </section>
 
@@ -55,6 +62,7 @@ export default function ServiceDetailPage() {
             getRowKey={(r) => r.id}
             columns={[
               { key: 'member_name', label: 'Member', render: (r) => <Link to={`/admin/members/${r.member_id}`} className='row-title'>{r.member_name}</Link> },
+              { key: 'gender', label: 'Gender', render: (r) => (r.gender ? (r.gender === 'male' ? 'Male' : 'Female') : '—') },
               { key: 'group_name', label: 'Group', render: (r) => r.group_name || '—' },
               { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status} /> },
               { key: 'notes', label: 'Notes', render: (r) => r.notes || '—' },
