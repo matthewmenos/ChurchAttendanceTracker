@@ -4,7 +4,7 @@ import useFetch from '../../hooks/useFetch.js';
 import { api } from '../../api/client.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import { Avatar, Badge, PageHeader, StatCard, StatusBadge } from '../../components/ui/display.jsx';
-import { EmptyState, ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
+import { Alert, EmptyState, ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
 import { Button, Field, Input, Select, Textarea } from '../../components/ui/forms.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Table } from '../../components/ui/Table.jsx';
