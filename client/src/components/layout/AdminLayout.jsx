@@ -5,15 +5,26 @@ import { Avatar, Badge } from '../ui/display.jsx';
 import { Alert } from '../ui/feedback.jsx';
 import { Button } from '../ui/forms.jsx';
 import ChangePasswordModal from '../ChangePasswordModal.jsx';
+import {
+  IconChart,
+  IconClipboardCheck,
+  IconUsers,
+  IconCalendar,
+  IconTrendingUp,
+  IconShield,
+  IconSettings,
+  IconChurch,
+  IconMenu,
+} from '../ui/icons.jsx';
 
 const NAV_ITEMS = [
-  { to: '/admin', label: 'Overview', icon: '📊', end: true },
-  { to: '/admin/attendance', label: 'Attendance', icon: '✅' },
-  { to: '/admin/members', label: 'Members', icon: '👥' },
-  { to: '/admin/services', label: 'Services', icon: '📅' },
-  { to: '/admin/reports', label: 'Reports', icon: '📈' },
-  { to: '/admin/users', label: 'Users', icon: '🛡️' },
-  { to: '/admin/settings', label: 'Settings', icon: '⚙️' },
+  { to: '/admin', label: 'Overview', icon: IconChart, end: true },
+  { to: '/admin/attendance', label: 'Attendance', icon: IconClipboardCheck },
+  { to: '/admin/members', label: 'Members', icon: IconUsers },
+  { to: '/admin/services', label: 'Services', icon: IconCalendar },
+  { to: '/admin/reports', label: 'Reports', icon: IconTrendingUp },
+  { to: '/admin/users', label: 'Users', icon: IconShield },
+  { to: '/admin/settings', label: 'Settings', icon: IconSettings },
 ];
 
 export default function AdminLayout() {
@@ -41,7 +52,9 @@ export default function AdminLayout() {
           end={item.end}
           className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}
         >
-          <span className='nav-icon' aria-hidden='true'>{item.icon}</span>
+          <span className='nav-icon' aria-hidden='true'>
+            <item.icon size={20} />
+          </span>
           <span>{item.label}</span>
         </NavLink>
       ))}
@@ -53,7 +66,7 @@ export default function AdminLayout() {
       <a className='skip-link' href='#main-content'>Skip to content</a>
       <aside className={'sidebar' + (navOpen ? ' open' : '')}>
         <div className='sidebar-brand'>
-          <span className='brand-mark' aria-hidden='true'>✚</span>
+          <span className='brand-mark' aria-hidden='true'><IconChurch size={22} /></span>
           <span className='brand-text'>{(user && user.churchName) || 'Church Attendance'}</span>
         </div>
         {nav}
@@ -84,7 +97,7 @@ export default function AdminLayout() {
             aria-expanded={navOpen}
             onClick={() => setNavOpen((v) => !v)}
           >
-            ☰
+            <IconMenu size={22} />
           </button>
           <span className='topbar-title'>Church Attendance Tracker</span>
           <span className='topbar-user' title={user ? user.email : ''}>{user ? user.name : ''}</span>

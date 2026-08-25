@@ -9,6 +9,7 @@ import { Button, Field, Input, Select } from '../../components/ui/forms.jsx';
 import { ConfirmDialog, Modal } from '../../components/ui/Modal.jsx';
 import { Table } from '../../components/ui/Table.jsx';
 import { formatDate, formatShortDate, timeAgo } from '../../utils/format.js';
+import { IconFileText } from '../../components/ui/icons.jsx';
 
 export default function UsersPage() {
   const toast = useToast();
@@ -257,7 +258,7 @@ export default function UsersPage() {
               <Badge variant='excused'>{recordsQ.data.totals.excused} excused</Badge>
             </div>
             {recordsQ.data.items.length === 0 ? (
-              <EmptyState icon='📝' title='No records yet' message='This user has not recorded any attendance.' />
+              <EmptyState icon={<IconFileText size={44} />} title='No records yet' message='This user has not recorded any attendance.' />
             ) : (
               <Table
                 caption='Recent attendance entries created by this user'

@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext.jsx';
 import { Avatar } from '../ui/display.jsx';
 import { Alert } from '../ui/feedback.jsx';
 import ChangePasswordModal from '../ChangePasswordModal.jsx';
+import { IconChurch, IconKey } from '../ui/icons.jsx';
 
 export default function UsherLayout() {
   const { user, logout } = useAuth();
@@ -19,11 +20,13 @@ export default function UsherLayout() {
     <div className='usher-shell'>
       <header className='usher-topbar'>
         <div className='usher-brand'>
-          <span className='brand-mark' aria-hidden='true'>✚</span>
+          <span className='brand-mark' aria-hidden='true'><IconChurch size={22} /></span>
           <span>{(user && user.churchName) || 'Attendance'}</span>
         </div>
         <div className='usher-user'>
-          <button type='button' className='icon-btn' onClick={() => setPwOpen(true)} aria-label='Change password' title='Change password'>🔑</button>
+          <button type='button' className='icon-btn' onClick={() => setPwOpen(true)} aria-label='Change password' title='Change password'>
+            <IconKey size={18} />
+          </button>
           <Avatar name={user ? user.name : ''} />
           <span className='usher-name'>{user ? user.name.split(' ')[0] : ''}</span>
           <button type='button' className='btn btn-outline-light btn-sm' onClick={handleLogout}>Sign out</button>

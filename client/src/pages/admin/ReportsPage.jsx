@@ -7,6 +7,7 @@ import { ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
 import { Button, Field, Select } from '../../components/ui/forms.jsx';
 import { Table } from '../../components/ui/Table.jsx';
 import { BarList, TrendChart } from '../../components/charts/Charts.jsx';
+import { IconCircleCheck, IconChevronRight } from '../../components/ui/icons.jsx';
 import { downloadCsv } from '../../utils/csv.js';
 import { formatShortDate } from '../../utils/format.js';
 
@@ -97,7 +98,7 @@ export default function ReportsPage() {
             ))}
           </Select>
         </Field>
-        {(data && data.from) && <span className='muted small self-end'>{data.from} → {data.to}</span>}
+        {(data && data.from) && <span className='muted small self-end'>{data.from} <IconChevronRight size={12} style={{ verticalAlign: '-2px' }} /> {data.to}</span>}
       </div>
 
       <section className='stat-grid stat-grid-4' aria-label='Totals'>
@@ -170,7 +171,10 @@ export default function ReportsPage() {
       <section className='card' aria-label='Members with repeated absences'>
         <h2 className='card-title pad-inline'>Repeated absences — consider following up</h2>
         {repeatAbsentees.length === 0 ? (
-          <p className='muted pad-inline'>Nobody currently meets the repeat-absence threshold. 🎉</p>
+          <p className='muted pad-inline'>
+            <IconCircleCheck size={18} style={{ color: 'var(--green-600)' }} />{' '}
+            Nobody currently meets the repeat-absence threshold.
+          </p>
         ) : (
           <Table
             caption='Active members with repeated absences'

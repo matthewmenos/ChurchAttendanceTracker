@@ -1,3 +1,5 @@
+import { IconChevronLeft, IconChevronRight } from './icons.jsx';
+
 export function Table({ columns, rows, getRowKey, caption }) {
   return (
     <div className="table-wrap">
@@ -34,13 +36,13 @@ export function Pagination({ page, pageSize, total, onPage }) {
   return (
     <nav className="pagination" aria-label="Pagination">
       <button type="button" className="btn btn-secondary btn-sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>
-        ← Prev
+        <IconChevronLeft size={14} /> Prev
       </button>
       <span>
         Page {page} of {totalPages}
       </span>
       <button type="button" className="btn btn-secondary btn-sm" disabled={page >= totalPages} onClick={() => onPage(page + 1)}>
-        Next →
+        Next <IconChevronRight size={14} />
       </button>
     </nav>
   );

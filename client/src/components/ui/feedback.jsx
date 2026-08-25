@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { api } from '../../api/client.js';
+import { IconClipboardList, IconTriangleAlert, IconX } from './icons.jsx';
 
 export function Alert({ variant = 'info', title, children, onClose }) {
   return (
@@ -9,7 +10,9 @@ export function Alert({ variant = 'info', title, children, onClose }) {
         {children}
       </div>
       {onClose && (
-        <button type="button" className="alert-close" onClick={onClose} aria-label="Dismiss message">×</button>
+        <button type="button" className="alert-close" onClick={onClose} aria-label="Dismiss message">
+          <IconX size={16} />
+        </button>
       )}
     </div>
   );
@@ -28,10 +31,10 @@ export function LoadingBlock({ label = 'Loading…' }) {
   );
 }
 
-export function EmptyState({ icon = '📋', title, message, action }) {
+export function EmptyState({ icon, title, message, action }) {
   return (
     <div className="empty-state">
-      <div className="empty-icon" aria-hidden="true">{icon}</div>
+      <div className="empty-icon" aria-hidden="true">{icon || <IconClipboardList size={44} />}</div>
       <h3>{title}</h3>
       {message && <p>{message}</p>}
       {action}
@@ -48,7 +51,7 @@ export function ErrorState({ error, onRetry }) {
   }, [error]);
   return (
     <div className="empty-state error-state" role="alert">
-      <div className="empty-icon" aria-hidden="true">⚠️</div>
+      <div className="empty-icon" aria-hidden="true"><IconTriangleAlert size={44} /></div>
       <h3>Something went wrong</h3>
       <p>{(error && error.message) || 'Please try again.'}</p>
       {onRetry && (

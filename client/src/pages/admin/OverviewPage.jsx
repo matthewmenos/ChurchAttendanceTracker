@@ -6,6 +6,7 @@ import { Badge, PageHeader, StatCard, StatusBadge } from '../../components/ui/di
 import { ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
 import { Table } from '../../components/ui/Table.jsx';
 import { TrendChart } from '../../components/charts/Charts.jsx';
+import { IconCircleCheck } from '../../components/ui/icons.jsx';
 import { formatDate, formatShortDate, timeAgo } from '../../utils/format.js';
 
 export default function OverviewPage() {
@@ -82,7 +83,10 @@ export default function OverviewPage() {
             <Link to='/admin/members' className='link-btn'>All members</Link>
           </div>
           {(d.highPriorityFollowUps || []).length === 0 ? (
-            <p className='muted pad-inline'>🎉 No high-priority follow-ups right now.</p>
+            <p className='muted pad-inline'>
+              <IconCircleCheck size={18} style={{ color: 'var(--green-600)', verticalAlign: '-3px' }} />{' '}
+              No high-priority follow-ups right now.
+            </p>
           ) : (
             <ul className='follow-list'>
               {d.highPriorityFollowUps.map((f) => (

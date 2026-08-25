@@ -9,6 +9,7 @@ import { Button, Field, Input, Select, Textarea } from '../../components/ui/form
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Table } from '../../components/ui/Table.jsx';
 import { formatDate, formatShortDate, formatTime } from '../../utils/format.js';
+import { IconCalendar } from '../../components/ui/icons.jsx';
 
 function todayStr() {
   const d = new Date();
@@ -96,7 +97,7 @@ export default function ServicesPage() {
       {listQ.loading && <LoadingBlock label='Loading services…' />}
       {listQ.error && <ErrorState error={listQ.error} onRetry={listQ.reload} />}
       {!listQ.loading && !listQ.error && shown.length === 0 && (
-        <EmptyState icon='📅' title={tab === 'upcoming' ? 'No upcoming services' : 'No services here yet'} message='Create one to start recording attendance.' action={<Button onClick={openCreate}>+ New service</Button>} />
+        <EmptyState icon={<IconCalendar size={44} />} title={tab === 'upcoming' ? 'No upcoming services' : 'No services here yet'} message='Create one to start recording attendance.' action={<Button onClick={openCreate}>+ New service</Button>} />
       )}
 
       {shown.length > 0 && (

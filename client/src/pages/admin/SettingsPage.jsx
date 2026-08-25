@@ -6,6 +6,7 @@ import { Badge, PageHeader, Tabs } from '../../components/ui/display.jsx';
 import { Alert, EmptyState, ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
 import { Button, Checkbox, Field, Input, Select, Textarea } from '../../components/ui/forms.jsx';
 import { ConfirmDialog, Modal } from '../../components/ui/Modal.jsx';
+import { IconTag } from '../../components/ui/icons.jsx';
 
 function SettingsForm({ initial, fields, endpoint }) {
   const toast = useToast();
@@ -122,7 +123,7 @@ function ResourceTab({ labelSingular, listQ, deleteConfirmText }) {
         <Button size='sm' onClick={() => { setEditing(null); setError(''); setFormOpen(true); }}>+ New</Button>
       </div>
       {items.length === 0 ? (
-        <EmptyState icon='🏷️' title={`No ${labelSingular.toLowerCase()}s yet`} message='Create one to start organising.' />
+        <EmptyState icon={<IconTag size={44} />} title={`No ${labelSingular.toLowerCase()}s yet`} message='Create one to start organising.' />
       ) : (
         <ul className='stack pad-inline'>
           {items.map((item) => (

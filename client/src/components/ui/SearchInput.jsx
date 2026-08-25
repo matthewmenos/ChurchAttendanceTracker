@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { IconX } from './icons.jsx';
 
 /** Debounced search box; parent receives trimmed values via onDebounce. */
 export default function SearchInput({ placeholder = 'Search…', initialValue = '', onDebounce, ariaLabel = 'Search', autoFocus }) {
@@ -39,7 +40,7 @@ export default function SearchInput({ placeholder = 'Search…', initialValue = 
       />
       {text && (
         <button type="button" className="search-clear" onClick={clear} aria-label="Clear search">
-          ×
+          <IconX size={12} />
         </button>
       )}
     </div>

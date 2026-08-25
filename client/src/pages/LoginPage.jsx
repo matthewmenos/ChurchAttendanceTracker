@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { api } from '../api/client.js';
 import { Alert } from '../components/ui/feedback.jsx';
 import { Button, Field, Input } from '../components/ui/forms.jsx';
+import { IconChurch } from '../components/ui/icons.jsx';
 
 export default function LoginPage() {
   const { user, initializing, login } = useAuth();
@@ -53,7 +54,7 @@ export default function LoginPage() {
     <div className='login-page'>
       <div className='login-card card'>
         <div className='login-brand'>
-          <span className='brand-mark big' aria-hidden='true'>✚</span>
+          <span className='brand-mark big' aria-hidden='true'><IconChurch size={28} /></span>
           <h1>{churchName || 'COP Agona Ahanta'}</h1>
           <p className='muted'>Attendance Tracker · Sign in to continue</p>
         </div>

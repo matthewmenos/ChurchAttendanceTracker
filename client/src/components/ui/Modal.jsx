@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './forms.jsx';
+import { IconX } from './icons.jsx';
 
 let openCount = 0;
 
@@ -61,7 +62,7 @@ export function Modal({ open, title, onClose, children, footer, width }) {
         <div className="modal-head">
           <h2>{title}</h2>
           <button type="button" className="icon-btn modal-close" onClick={onClose} aria-label="Close dialog">
-            ×
+            <IconX size={18} />
           </button>
         </div>
         <div className="modal-body">{children}</div>

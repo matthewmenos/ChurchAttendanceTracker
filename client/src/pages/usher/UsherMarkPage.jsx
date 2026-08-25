@@ -11,6 +11,7 @@ import SearchInput from '../../components/ui/SearchInput.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Field, Textarea } from '../../components/ui/forms.jsx';
 import { formatDate, formatTime } from '../../utils/format.js';
+import { IconSearch, IconFileText, IconCheck } from '../../components/ui/icons.jsx';
 
 export default function UsherMarkPage() {
   const { serviceId } = useParams();
@@ -122,7 +123,7 @@ export default function UsherMarkPage() {
       {roster.error && <ErrorState error={roster.error} onRetry={roster.reload} />}
 
       {!roster.loading && !roster.error && rows.length === 0 && (
-        <EmptyState icon='🔍' title='No members match' message='Try a different search or group filter.' />
+        <EmptyState icon={<IconSearch size={44} />} title='No members match' message='Try a different search or group filter.' />
       )}
 
       {rows.length > 0 && (
@@ -143,7 +144,14 @@ export default function UsherMarkPage() {
                   aria-label={`Add a note for ${row.full_name}${e.notes ? ' (note saved)' : ''}`}
                   title='Add note'
                 >
-                  {e.notes && e.notes.length ? '📝✓' : '📝'}
+                  {e.notes && e.notes.length ? (
+                    <span className='note-glyph'>
+                      <IconFileText size={18} />
+                      <IconCheck size={11} />
+                    </span>
+                  ) : (
+                    <IconFileText size={18} />
+                  )}
                 </button>
                 <StatusButtons
                   value={e.status || ''}

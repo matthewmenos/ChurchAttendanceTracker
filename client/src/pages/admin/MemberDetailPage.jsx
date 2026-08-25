@@ -10,6 +10,7 @@ import { Modal } from '../../components/ui/Modal.jsx';
 import { Table } from '../../components/ui/Table.jsx';
 
 import { formatDate, formatShortDate, formatDateTime } from '../../utils/format.js';
+import { IconCalendar, IconChevronLeft, IconTriangleAlert } from '../../components/ui/icons.jsx';
 
 export default function MemberDetailPage() {
   const { id } = useParams();
@@ -64,7 +65,7 @@ export default function MemberDetailPage() {
 
   return (
     <div className='container wide'>
-      <button type='button' className='link-btn back-link' onClick={() => navigate('/admin/members')}>← Back to members</button>
+      <button type='button' className='link-btn back-link' onClick={() => navigate('/admin/members')}><IconChevronLeft size={14} /> Back to members</button>
 
       <section className='card pad member-hero'>
         <Avatar name={member.full_name} size='lg' />
@@ -73,7 +74,7 @@ export default function MemberDetailPage() {
           <div className='badge-row'>
             <Badge variant={member.status}>{member.status === 'active' ? 'Active' : 'Inactive'}</Badge>
             {member.group_name && <Badge variant='info'>{member.group_name}</Badge>}
-            {member.consecutive_absences >= 3 && <Badge variant='high'>{member.consecutive_absences} weeks absent ⚠</Badge>}
+            {member.consecutive_absences >= 3 && <Badge variant='high'>{member.consecutive_absences} weeks absent <IconTriangleAlert size={11} /></Badge>}
           </div>
           <p className='muted'>
             {member.email || 'No email on file'} · {member.phone || 'No phone on file'}<br />
@@ -98,7 +99,7 @@ export default function MemberDetailPage() {
         <section className='card' aria-label='Attendance history'>
           <h2 className='card-title pad-inline'>Attendance history</h2>
           {items.length === 0 ? (
-            <EmptyState icon='🗓️' title='No attendance yet' message='This member has not been marked for any service.' />
+            <EmptyState icon={<IconCalendar size={44} />} title='No attendance yet' message='This member has not been marked for any service.' />
           ) : (
             <Table
               caption='Attendance history for this member'

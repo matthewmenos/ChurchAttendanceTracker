@@ -11,6 +11,7 @@ import { Modal, ConfirmDialog } from '../../components/ui/Modal.jsx';
 import SearchInput from '../../components/ui/SearchInput.jsx';
 import { Pagination, Table } from '../../components/ui/Table.jsx';
 import { formatShortDate } from '../../utils/format.js';
+import { IconUsers, IconTriangleAlert } from '../../components/ui/icons.jsx';
 
 const EMPTY_FORM = { fullName: '', email: '', phone: '', groupId: '', status: 'active', notes: '' };
 
@@ -130,7 +131,7 @@ export default function MembersPage() {
       {listQ.loading && <LoadingBlock label='Loading members…' />}
       {listQ.error && <ErrorState error={listQ.error} onRetry={listQ.reload} />}
       {!listQ.loading && !listQ.error && items.length === 0 && (
-        <EmptyState icon='👥' title='No members found' message='Try different filters, or add your first member.' action={<Button onClick={openCreate}>+ Add member</Button>} />
+        <EmptyState icon={<IconUsers size={44} />} title='No members found' message='Try different filters, or add your first member.' action={<Button onClick={openCreate}>+ Add member</Button>} />
       )}
 
       {items.length > 0 && (
@@ -161,7 +162,7 @@ export default function MembersPage() {
                 key: 'consecutive_absences',
                 label: 'Absences',
                 className: 'num',
-                render: (m) => (m.consecutive_absences >= 3 ? <Badge variant='high'>{m.consecutive_absences} ⚠</Badge> : String(m.consecutive_absences)),
+                render: (m) => (m.consecutive_absences >= 3 ? <Badge variant='high'>{m.consecutive_absences} <IconTriangleAlert size={11} /></Badge> : String(m.consecutive_absences)),
               },
               {
                 key: 'actions',

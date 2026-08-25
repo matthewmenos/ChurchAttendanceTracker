@@ -6,6 +6,7 @@ import { Badge, PageHeader, StatCard, StatusBadge } from '../../components/ui/di
 import { EmptyState, ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
 import { Table } from '../../components/ui/Table.jsx';
 import { formatDate, formatDateTime, formatTime } from '../../utils/format.js';
+import { IconChevronLeft, IconFileText } from '../../components/ui/icons.jsx';
 
 export default function ServiceDetailPage() {
   const { id } = useParams();
@@ -25,7 +26,7 @@ export default function ServiceDetailPage() {
 
   return (
     <div className='container wide'>
-      <Link to='/admin/services' className='link-btn back-link'>← Back to services</Link>
+      <Link to='/admin/services' className='link-btn back-link'><IconChevronLeft size={14} /> Back to services</Link>
 
       <PageHeader
         title={service.service_name}
@@ -45,7 +46,7 @@ export default function ServiceDetailPage() {
         {attendance.loading && <LoadingBlock />}
         {attendance.error && <div className='pad-inline'><ErrorState error={attendance.error} onRetry={attendance.reload} /></div>}
         {!attendance.loading && !attendance.error && items.length === 0 && (
-          <EmptyState icon='📝' title='No attendance recorded yet' message='Use the button above to open this service in the attendance screen.' />
+          <EmptyState icon={<IconFileText size={44} />} title='No attendance recorded yet' message='Use the button above to open this service in the attendance screen.' />
         )}
         {items.length > 0 && (
           <Table

@@ -5,6 +5,8 @@ import useFetch from '../../hooks/useFetch.js';
 import { api } from '../../api/client.js';
 import { Badge, PageHeader } from '../../components/ui/display.jsx';
 import { EmptyState, ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
+import { IconCalendar } from '../../components/ui/icons.jsx';
+import { IconChevronRight } from '../../components/ui/icons.jsx';
 import { formatDate, formatTime } from '../../utils/format.js';
 
 function greeting() {
@@ -43,14 +45,14 @@ export default function UsherHomePage() {
           {service.location_name ? ` · ${service.location_name}` : ''}
         </span>
       </div>
-      <span className='service-card-cta'>{highlight ? 'Start now →' : 'Open →'}</span>
+      <span className='service-card-cta'>{highlight ? <>Start now <IconChevronRight size={14} /></> : <>Open <IconChevronRight size={14} /></>}</span>
     </Link>
   );
 
   return (
     <div className='container narrow'>
       <PageHeader
-        title={`${greeting()}, ${user ? user.name.split(' ')[0] : ''}! 👋`}
+        title={`${greeting()}, ${user ? user.name.split(' ')[0] : ''}`}
         subtitle='Choose the current service, then mark each member with a single tap.'
       />
 
@@ -62,7 +64,7 @@ export default function UsherHomePage() {
           <section aria-labelledby='today-heading'>
             <h2 id='today-heading' className='section-title'>Today</h2>
             {todays.length === 0 ? (
-              <EmptyState icon='🗓️' title='No services scheduled for today' message='Check upcoming services below or ask your admin to add one.' />
+              <EmptyState icon={<IconCalendar size={44} />} title='No services scheduled for today' message='Check upcoming services below or ask your admin to add one.' />
             ) : (
               <div className='stack'>
                 {todays.map((s) => <ServiceCard key={s.id} service={s} highlight />)}

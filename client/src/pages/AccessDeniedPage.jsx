@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { IconLock } from '../components/ui/icons.jsx';
 
 export default function AccessDeniedPage() {
   const { user, logout } = useAuth();
   return (
     <div className='page-center'>
       <div className='card message-card'>
-        <div className='empty-icon' aria-hidden='true'>🔒</div>
+        <div className='empty-icon' aria-hidden='true'><IconLock size={44} /></div>
         <h1>Access denied</h1>
         <p className='muted'>
           Your account does not have permission to view that page.
