@@ -11,7 +11,7 @@ import SearchInput from '../../components/ui/SearchInput.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Field, Select, Textarea } from '../../components/ui/forms.jsx';
 import { formatDate, formatShortDate, formatTime, timeAgo } from '../../utils/format.js';
-import { IconSearch, IconFileText, IconCheck } from '../../components/ui/icons.jsx';
+import { IconSearch, IconFileText, IconCheck, IconLock } from '../../components/ui/icons.jsx';
 
 const STATUS_FILTERS = [
   ['all', 'Everyone'],
@@ -50,6 +50,7 @@ export default function AttendancePage() {
   const roster = useRoster(serviceId, { search: debounced, groupId, status: statusFilter });
   const rows = (roster.data && roster.data.rows) || [];
   const service = roster.data && roster.data.service;
+  const closed = !!(service && service.attendance_closed);
 
   useEffect(() => {
     document.title = 'Attendance — Church Attendance Tracker';
@@ -160,7 +161,12 @@ export default function AttendancePage() {
       </div>
 
       {saveError && !saving && <Alert variant='error' onClose={() => setSaveError(null)}>{saveError}</Alert>}
-      {!saveError && dirtyIds.length === 0 && saving === false && roster.data && roster.data.markedCount > 0 && (
+      {closed && (
+        <Alert variant='warning' title={<><IconLock size={15} /> Attendance is closed for this service</>}>
+          An admin closed marking for this service{service && service.attendance_closed_by_name ? ` (${service.attendance_closed_by_name})` : ''}. Records below are read-only — reopen it from the service page to make changes.
+        </Alert>
+      )}
+      {!closed && !saveError && dirtyIds.length === 0 && saving === false && roster.data && roster.data.markedCount > 0 && (
         <Alert variant='success'><IconCheck size={16} /> Saved — {roster.data.markedCount} members marked for this service.</Alert>
       )}
 
@@ -189,22 +195,28 @@ export default function AttendancePage() {
                     by {row.recorded_by_name} · {timeAgo(row.updated_at)}
                   </span>
                 )}
-                <button
-                  type='button'
-                  className={'icon-btn note-btn' + ((e.notes && e.notes.length) ? ' has-note' : '')}
-                  onClick={() => openNote(row)}
-                  aria-label={`Edit note for ${row.full_name}`}
-                >
-                  {e.notes && e.notes.length ? (
-                    <span className='note-glyph'>
+                {closed ? (
+                  <StatusBadge status={e.status || ''} />
+                ) : (
+                  <button
+                    type='button'
+                    className={'icon-btn note-btn' + ((e.notes && e.notes.length) ? ' has-note' : '')}
+                    onClick={() => openNote(row)}
+                    aria-label={`Edit note for ${row.full_name}`}
+                  >
+                    {e.notes && e.notes.length ? (
+                      <span className='note-glyph'>
+                        <IconFileText size={18} />
+                        <IconCheck size={11} />
+                      </span>
+                    ) : (
                       <IconFileText size={18} />
-                      <IconCheck size={11} />
-                    </span>
-                  ) : (
-                    <IconFileText size={18} />
-                  )}
-                </button>
-                <StatusButtons value={e.status || ''} onChange={(v) => setStatus(row, v)} ariaLabel={`Status for ${row.full_name}`} />
+                    )}
+                  </button>
+                )}
+                {closed ? null : (
+                  <StatusButtons value={e.status || ''} onChange={(v) => setStatus(row, v)} ariaLabel={`Status for ${row.full_name}`} />
+                )}
               </li>
             );
           })}
@@ -220,8 +232,12 @@ export default function AttendancePage() {
           )}
         </div>
         <div className='save-actions'>
-          {dirtyIds.length > 0 && <Button variant='ghost' onClick={() => setEdits({})}>Discard</Button>}
-          <Button size='lg' loading={saving} disabled={dirtyIds.length === 0 || !serviceId} onClick={saveAll}>Save attendance</Button>
+          {!closed && dirtyIds.length > 0 && <Button variant='ghost' onClick={() => setEdits({})}>Discard</Button>}
+          {closed ? (
+            <span className='muted small'><IconLock size={14} style={{ verticalAlign: '-2px' }} /> Marking is closed for this service</span>
+          ) : (
+            <Button size='lg' loading={saving} disabled={dirtyIds.length === 0 || !serviceId} onClick={saveAll}>Save attendance</Button>
+          )}
         </div>
       </footer>
 

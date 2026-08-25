@@ -112,7 +112,7 @@ export default function ServicesPage() {
               { key: 'start_time', label: 'Time', render: (r) => (r.start_time ? formatTime(r.start_time) : '—') },
               { key: 'location_name', label: 'Location', render: (r) => r.location_name || '—' },
               { key: 'total_headcount', label: 'Headcount', className: 'num' },
-              { key: 'present', label: 'Attendance', render: (r) => (<Badge variant={r.marked > 0 ? 'info' : 'neutral'}>{r.present} marked</Badge>) },
+              { key: 'present', label: 'Attendance', render: (r) => (<span><Badge variant={r.marked > 0 ? 'info' : 'neutral'}>{r.present} marked</Badge>{r.attendance_closed ? <Badge variant='high'>Closed</Badge> : null}</span>) },
               {
                 key: 'actions',
                 label: 'Actions',

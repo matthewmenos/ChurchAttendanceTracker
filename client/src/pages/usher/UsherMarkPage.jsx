@@ -4,14 +4,14 @@ import useRoster from '../../hooks/useRoster.js';
 import useDebounce from '../../hooks/useDebounce.js';
 import useFetch from '../../hooks/useFetch.js';
 import { api } from '../../api/client.js';
-import { Avatar, Badge, StatusButtons } from '../../components/ui/display.jsx';
+import { Avatar, Badge, StatusButtons, StatusBadge } from '../../components/ui/display.jsx';
 import { Alert, EmptyState, ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
 import { Button } from '../../components/ui/forms.jsx';
 import SearchInput from '../../components/ui/SearchInput.jsx';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { Field, Textarea } from '../../components/ui/forms.jsx';
 import { formatDate, formatTime } from '../../utils/format.js';
-import { IconSearch, IconFileText, IconCheck } from '../../components/ui/icons.jsx';
+import { IconSearch, IconFileText, IconCheck, IconLock } from '../../components/ui/icons.jsx';
 
 export default function UsherMarkPage() {
   const { serviceId } = useParams();
@@ -28,6 +28,7 @@ export default function UsherMarkPage() {
   const roster = useRoster(serviceId, { search: debounced, groupId });
   const rows = (roster.data && roster.data.rows) || [];
   const service = roster.data && roster.data.service;
+  const closed = !!(service && service.attendance_closed);
 
   useEffect(() => {
     document.title = 'Mark attendance — Church Attendance Tracker';
@@ -104,6 +105,12 @@ export default function UsherMarkPage() {
         <Link to='/usher' className='btn btn-secondary btn-sm'>Switch service</Link>
       </div>
 
+      {closed && (
+        <Alert variant='warning' title={<><IconLock size={15} /> Attendance is closed</>}>
+          An admin has closed marking for this service. The list below is read-only.
+        </Alert>
+      )}
+
       <div className='filter-row'>
         <SearchInput placeholder='Search members…' onDebounce={setSearch} ariaLabel='Search members by name' autoFocus />
         <select
@@ -137,28 +144,34 @@ export default function UsherMarkPage() {
                   <strong>{row.full_name}</strong>
                   {row.group_name && <span className='muted small'>{row.group_name}</span>}
                 </span>
-                <button
-                  type='button'
-                  className={'icon-btn note-btn' + ((e.notes && e.notes.length) ? ' has-note' : '')}
-                  onClick={() => openNote(row)}
-                  aria-label={`Add a note for ${row.full_name}${e.notes ? ' (note saved)' : ''}`}
-                  title='Add note'
-                >
-                  {e.notes && e.notes.length ? (
-                    <span className='note-glyph'>
+                {closed ? (
+                  <StatusBadge status={e.status || ''} />
+                ) : (
+                  <button
+                    type='button'
+                    className={'icon-btn note-btn' + ((e.notes && e.notes.length) ? ' has-note' : '')}
+                    onClick={() => openNote(row)}
+                    aria-label={`Add a note for ${row.full_name}${e.notes ? ' (note saved)' : ''}`}
+                    title='Add note'
+                  >
+                    {e.notes && e.notes.length ? (
+                      <span className='note-glyph'>
+                        <IconFileText size={18} />
+                        <IconCheck size={11} />
+                      </span>
+                    ) : (
                       <IconFileText size={18} />
-                      <IconCheck size={11} />
-                    </span>
-                  ) : (
-                    <IconFileText size={18} />
-                  )}
-                </button>
-                <StatusButtons
-                  value={e.status || ''}
-                  onChange={(v) => setStatus(row, v)}
-                  ariaLabel={`Attendance status for ${row.full_name}`}
-                  size='lg'
-                />
+                    )}
+                  </button>
+                )}
+                {closed ? null : (
+                  <StatusButtons
+                    value={e.status || ''}
+                    onChange={(v) => setStatus(row, v)}
+                    ariaLabel={`Attendance status for ${row.full_name}`}
+                    size='lg'
+                  />
+                )}
               </li>
             );
           })}
@@ -172,12 +185,16 @@ export default function UsherMarkPage() {
           {saveError && <Alert variant='error'>{saveError}</Alert>}
         </div>
         <div className='save-actions'>
-          {dirtyIds.length > 0 && (
+          {!closed && dirtyIds.length > 0 && (
             <Button variant='ghost' onClick={() => setEdits({})}>Discard</Button>
           )}
-          <Button size='lg' loading={saving} disabled={dirtyIds.length === 0} onClick={saveAll}>
-            Save attendance{dirtyIds.length > 0 ? ` (${dirtyIds.length})` : ''}
-          </Button>
+          {closed ? (
+            <span className='muted small'><IconLock size={14} style={{ verticalAlign: '-2px' }} /> Marking is closed</span>
+          ) : (
+            <Button size='lg' loading={saving} disabled={dirtyIds.length === 0} onClick={saveAll}>
+              Save attendance{dirtyIds.length > 0 ? ` (${dirtyIds.length})` : ''}
+            </Button>
+          )}
         </div>
       </footer>
 

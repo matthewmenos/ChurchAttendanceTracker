@@ -10,12 +10,14 @@ const router = express.Router();
 const LIST_SELECT = `
   SELECT s.id, s.service_date, s.service_name, s.start_time, s.total_headcount, s.notes,
          s.location_id, l.name AS location_name, s.created_at, s.updated_at,
+         s.attendance_closed, s.attendance_closed_at, cb.name AS attendance_closed_by_name,
          COALESCE(a.present, 0)::int AS present,
          COALESCE(a.absent, 0)::int  AS absent,
          COALESCE(a.excused, 0)::int AS excused,
          COALESCE(a.marked, 0)::int  AS marked
     FROM services s
     LEFT JOIN locations l ON l.id = s.location_id
+    LEFT JOIN users cb ON cb.id = s.attendance_closed_by
     LEFT JOIN (
       SELECT service_id,
              COUNT(*) FILTER (WHERE status = 'present') AS present,
@@ -101,6 +103,30 @@ router.get('/:id', authenticate, asyncHandler(async (req, res) => {
   const service = await serviceById(Number(req.params.id));
   if (!service) throw new ApiError(404, 'Service not found.');
   res.json({ service: withFlags(service) });
+}));
+
+/** Close attendance marking for this service (admin only). */
+router.post('/:id/close', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const service = await serviceById(id);
+  if (!service) throw new ApiError(404, 'Service not found.');
+  await db.query(
+    'UPDATE services SET attendance_closed = TRUE, attendance_closed_at = now(), attendance_closed_by = $1 WHERE id = $2',
+    [req.user.id, id]
+  );
+  res.json({ service: withFlags(await serviceById(id)) });
+}));
+
+/** Reopen attendance marking for this service (admin only). */
+router.post('/:id/reopen', authenticate, requireAdmin, asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const service = await serviceById(id);
+  if (!service) throw new ApiError(404, 'Service not found.');
+  await db.query(
+    'UPDATE services SET attendance_closed = FALSE, attendance_closed_at = NULL, attendance_closed_by = NULL WHERE id = $1',
+    [id]
+  );
+  res.json({ service: withFlags(await serviceById(id)) });
 }));
 
 router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {

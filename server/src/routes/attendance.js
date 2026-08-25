@@ -11,7 +11,7 @@ const router = express.Router();
 async function serviceById(id) {
   const { rows } = await db.query(
     `SELECT s.id, s.service_date, s.service_name, s.start_time, s.total_headcount,
-            l.name AS location_name
+            s.attendance_closed, l.name AS location_name
        FROM services s
        LEFT JOIN locations l ON l.id = s.location_id
       WHERE s.id = $1`,
@@ -19,6 +19,8 @@ async function serviceById(id) {
   );
   return rows[0];
 }
+
+const CLOSED_MSG = 'Attendance for this service has been closed by an admin. Ask an admin to reopen it before making changes.';
 
 async function recordById(id) {
   const { rows } = await db.query(
@@ -105,6 +107,7 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
 
   const service = await serviceById(serviceId);
   if (!service) throw new ApiError(404, 'Service not found.');
+  if (service.attendance_closed) throw new ApiError(403, CLOSED_MSG);
 
   const { rows: memberRows } = await db.query('SELECT id, status FROM members WHERE id = $1', [memberId]);
   const member = memberRows[0];
@@ -140,6 +143,9 @@ router.put('/:id', authenticate, asyncHandler(async (req, res) => {
   const { rows } = await db.query('SELECT * FROM attendance WHERE id = $1', [id]);
   const record = rows[0];
   if (!record) throw new ApiError(404, 'Attendance record not found.');
+
+  const svc = await serviceById(record.service_id);
+  if (svc && svc.attendance_closed) throw new ApiError(403, CLOSED_MSG);
 
   if (req.user.role !== 'admin') {
     const settings = await getSettingsMap(db);
@@ -230,8 +236,11 @@ router.get('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
 
 router.delete('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const { rows } = await db.query('DELETE FROM attendance WHERE id = $1 RETURNING member_id', [id]);
+  const { rows } = await db.query('SELECT member_id, service_id FROM attendance WHERE id = $1', [id]);
   if (!rows.length) throw new ApiError(404, 'Attendance record not found.');
+  const svc = await serviceById(rows[0].service_id);
+  if (svc && svc.attendance_closed) throw new ApiError(403, CLOSED_MSG);
+  await db.query('DELETE FROM attendance WHERE id = $1 RETURNING member_id', [id]);
   await recomputeMemberStats(db, rows[0].member_id);
   res.status(204).end();
 }));
