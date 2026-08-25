@@ -18,6 +18,8 @@ export default function useFetch(fn, deps = []) {
     } catch (err) {
       setError(err);
       return undefined;
+    } finally {
+      setLoading(false);
     }
   }, []);
 

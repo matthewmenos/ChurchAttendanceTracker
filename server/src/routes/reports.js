@@ -72,15 +72,20 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
       LIMIT 5`
   );
 
-  const { rows: trendRows } = await db.query(
-    `SELECT s.id, s.service_date, s.service_name,
+  const trendSql = `SELECT s.id, s.service_date, s.service_name,
             COALESCE(a.present, 0)::int AS present,
             COALESCE(a.absent, 0)::int  AS absent,
             COALESCE(a.excused, 0)::int AS excused
        FROM services s ${SERVICE_COUNTS_JOIN}
       WHERE s.service_date <= $1
-      ORDER BY s.service_date DESC LIMIT 12`
-  );
+      ORDER BY s.service_date DESC LIMIT 12`;
+  let trendRows;
+  try {
+    ({ rows: trendRows } = await db.query({ text: trendSql, values: [today] }));
+  } catch (e) {
+    console.error('[trend] dashboard trend query failed:', e.message);
+    throw e;
+  }
   trendRows.reverse(); // oldest -> newest for charting
 
   const { rows: recentServices } = await db.query(
@@ -125,17 +130,15 @@ router.get('/summary', asyncHandler(async (req, res) => {
   const defaultFrom = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const from = vDate(req.query, 'from') || defaultFrom;
 
-  const { rows: byService } = await db.query(
-    `SELECT s.id, s.service_date, s.service_name, s.total_headcount, l.name AS location_name,
+  const { rows: byService } = await db.query({ text: `
+    SELECT s.id, s.service_date, s.service_name, s.total_headcount, l.name AS location_name,
             COALESCE(a.present, 0)::int AS present,
             COALESCE(a.absent, 0)::int  AS absent,
             COALESCE(a.excused, 0)::int AS excused
        FROM services s
        LEFT JOIN locations l ON l.id = s.location_id ${SERVICE_COUNTS_JOIN}
       WHERE s.service_date BETWEEN $1 AND $2
-      ORDER BY s.service_date ASC`,
-    [from, to]
-  );
+      ORDER BY s.service_date ASC`, values: [from, to] });
 
   const totals = byService.reduce(
     (acc, r) => ({
@@ -171,8 +174,8 @@ router.get('/summary', asyncHandler(async (req, res) => {
       LEFT JOIN services s ON s.id = a.service_id AND s.service_date BETWEEN $1 AND $2
      WHERE m.group_id IS NULL`;
 
-  const { rows: g1 } = await db.query(groupQuery, [from, to]);
-  const { rows: g2 } = await db.query(noGroupQuery, [from, to]);
+  const { rows: g1 } = await db.query({ text: groupQuery, values: [from, to] });
+  const { rows: g2 } = await db.query({ text: noGroupQuery, values: [from, to] });
   const byGroup = [...g1, ...g2]
     .map((r) => ({
       ...r,
@@ -184,22 +187,20 @@ router.get('/summary', asyncHandler(async (req, res) => {
     }))
     .sort((a, b) => b.active_members - a.active_members);
 
-  const { rows: repeatAbsentees } = await db.query(
-    `SELECT t.* FROM (
-       SELECT m.id, m.full_name, g.name AS group_name, m.consecutive_absences, m.last_attended,
-              (SELECT COUNT(*) FROM attendance a
-                 JOIN services s ON s.id = a.service_id
-                WHERE a.member_id = m.id AND a.status = 'absent'
-                  AND s.service_date BETWEEN $1 AND $2) AS absences_in_range
+  const { rows: repeatAbsentees } = await db.query({ text: `
+     SELECT t.* FROM (
+        SELECT m.id, m.full_name, g.name AS group_name, m.consecutive_absences, m.last_attended,
+               (SELECT COUNT(*) FROM attendance a
+                  JOIN services s ON s.id = a.service_id
+                 WHERE a.member_id = m.id AND a.status = 'absent'
+                   AND s.service_date BETWEEN $1 AND $2) AS absences_in_range
          FROM members m
          LEFT JOIN member_groups g ON g.id = m.group_id
         WHERE m.status = 'active'
      ) t
       WHERE t.consecutive_absences >= 3 OR t.absences_in_range >= 4
       ORDER BY t.consecutive_absences DESC, t.absences_in_range DESC
-      LIMIT 25`,
-    [from, to]
-  );
+      LIMIT 25`, values: [from, to] });
 
   const { rows: byUsher } = await db.query(
     `SELECT u.id, u.name,
