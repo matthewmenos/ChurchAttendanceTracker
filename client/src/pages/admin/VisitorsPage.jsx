@@ -9,6 +9,7 @@ import { Button, Field, Input, Select, Textarea } from '../../components/ui/form
 import { ConfirmDialog, Modal } from '../../components/ui/Modal.jsx';
 import { Pagination, Table } from '../../components/ui/Table.jsx';
 import { formatShortDate, formatDate } from '../../utils/format.js';
+import { downloadCsv } from '../../utils/csv.js';
 import { IconUsers } from '../../components/ui/icons.jsx';
 
 const STATUSES = [['new', 'New'], ['contacted', 'Contacted'], ['visited', 'Visited'], ['joined', 'Joined'], ['lost', 'Lost']];
@@ -76,16 +77,53 @@ export default function VisitorsPage() {
     finally { setConverting(false); }
   };
 
+  const exportVisitors = async () => {
+    const rows = [];
+    let page = 1;
+    for (;;) {
+      const res = await api('/visitors', {
+        params: { search: debounced || undefined, followupStatus: status || undefined, page, pageSize: 200 },
+      });
+      rows.push(...res.items);
+      if (rows.length >= res.total || res.items.length === 0) break;
+      page += 1;
+    }
+    downloadCsv(
+      `visitors-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Name', 'Phone', 'Email', 'Gender', 'Age group', 'Home area', 'Invited by', 'First visit', 'Visits', 'Last visit', 'Follow-up status', 'Assigned to', 'Member?', 'Recorded by'],
+      rows.map((v) => [
+        v.full_name,
+        v.phone || '',
+        v.email || '',
+        v.gender ? (v.gender === 'male' ? 'Male' : 'Female') : '',
+        v.age_group || '',
+        v.home_area || '',
+        v.invited_by || '',
+        v.first_visit_date || '',
+        v.visit_count,
+        v.last_visit_date || '',
+        statusLabel(v.followup_status),
+        v.assigned_to || '',
+        v.converted_member_id ? 'Yes' : 'No',
+        v.created_by_name || '',
+      ])
+    );
+    toast(`Exported ${rows.length} visitor(s).`);
+  };
+
   const totals = stats.reduce((acc, s) => ({
     first_time: acc.first_time + Number(s.first_time || 0),
     returning: acc.returning + Number(s.returning || 0),
     converted: acc.converted + Number(s.converted || 0),
   }), { first_time: 0, returning: 0, converted: 0 });
 
-  /* __VIS_LOGIC__ */
   return (
     <div className='container wide'>
-      <PageHeader title='Visitors' subtitle='Track guests, follow up, and welcome them into membership.' />
+      <PageHeader
+        title='Visitors'
+        subtitle='Track guests, follow up, and welcome them into membership.'
+        actions={<Button variant='secondary' size='sm' onClick={exportVisitors}>Export visitors CSV</Button>}
+      />
       <section className='stat-grid stat-grid-4' aria-label='Visitor totals'>
         <StatCard tone='blue' label='Total visitors' value={String(stats.reduce((a, s) => a + Number(s.total_visitors || 0), 0))} sub='across all services' />
         <StatCard tone='green' label='First time' value={String(totals.first_time)} />

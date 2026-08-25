@@ -132,7 +132,9 @@ export default function UsherVisitorsPage() {
       </div>
 
       <div className='card' style={{ marginTop: 16 }}>
-        <h2 className='card-title pad-inline'>Visitors for this service</h2>
+        <h2 className='card-title pad-inline'>
+          Visitors for this service{!visitorsQ.loading && !visitorsQ.error ? ` (${items.length})` : ''}
+        </h2>
         {!serviceId && (
           <EmptyState icon={<IconUsers size={44} />} title='Choose a service' message='Pick a service above to see its visitors.' />
         )}

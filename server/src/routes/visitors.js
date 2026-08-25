@@ -49,8 +49,8 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   res.json(result);
 }));
 
-// Admin-only management below.
-router.use(requireAdmin);
+// Admin-only management below. authenticate must run first so req.user exists.
+router.use(authenticate, requireAdmin);
 
 router.get('/stats', asyncHandler(async (req, res) => {
   res.json({ items: await visitorStats({ from: vDate(req.query, 'from'), to: vDate(req.query, 'to') }) });
