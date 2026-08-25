@@ -216,7 +216,8 @@ npm run migrate
 npm run create:admin -- "Pastor Kwesi Mensah" "admin@copagonaahanta.app" "ChangeMe-123"
 ```
 
-`create:admin` upserts a single admin (no demo data). Prefer sample data to
+`create:admin` upserts a single admin (no demo data); set `ADMIN_USERNAME` to
+also give them a username for sign-in. Prefer sample data to
 explore first? Use `npm run seed` instead, then reset that password later.
 
 ### 3 · Import the repo on Vercel

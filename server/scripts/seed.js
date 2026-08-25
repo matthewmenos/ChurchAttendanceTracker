@@ -61,7 +61,7 @@ async function main() {
   const { rows: u2Rows } = await db.query(
     `INSERT INTO users (name, email, password_hash, role, created_by)
      VALUES ($1, $2, $3, 'usher', $4) RETURNING id`,
-    ['Daniel Okafor', process.env.SEED_USHER2_EMAIL || "daniel@${env.seed.usherEmail.split('@')[1]}", usherHash, adminId]
+    ['Daniel Okafor', process.env.SEED_USHER2_EMAIL || `daniel@${env.seed.usherEmail.split('@')[1]}`, usherHash, adminId]
   );
   const usher2 = u2Rows[0].id;
 
@@ -236,7 +236,7 @@ async function main() {
   console.log('Seed complete! Demo accounts:');
   console.log(`  Admin : ${env.seed.adminEmail} / ${env.seed.adminPassword}`);
   console.log(`  Usher : ${env.seed.usherEmail} / ${env.seed.usherPassword}`);
-  console.log("  Usher : daniel@${env.seed.usherEmail.split('@')[1]} / same password as above");
+  console.log(`  Usher : daniel@${env.seed.usherEmail.split('@')[1]} / same password as above`);
   console.log(`Members: ${memberIds.length}, Services: ${serviceIds.length}, Follow-up plans: ${absentees.length}`);
 }
 
