@@ -29,6 +29,21 @@ export default function MembersPage() {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
+  // Birthday is a controlled input so we can auto-fill the read-only Age field.
+  const [birthday, setBirthday] = useState('');
+  const [age, setAge] = useState(null);
+
+  // Whole years between a birthday (YYYY-MM-DD) and today. null when unset.
+  const calcAge = (bd) => {
+    if (!bd) return null;
+    const [y, m, d] = bd.split('-').map(Number);
+    if (!y || !m || !d) return null;
+    const now = new Date();
+    let a = now.getFullYear() - y;
+    const before = now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d);
+    if (before) a -= 1;
+    return a >= 0 ? a : null;
+  };
 
   useEffect(() => {
     document.title = 'Members — Church Attendance Tracker';
@@ -44,12 +59,16 @@ export default function MembersPage() {
 
   const openCreate = () => {
     setEditing(null);
+    setBirthday('');
+    setAge(null);
     setFormError('');
     setFormOpen(true);
   };
 
   const openEdit = (member) => {
     setEditing(member);
+    setBirthday(member.birthday || '');
+    setAge(member.age || null);
     setFormError('');
     setFormOpen(true);
   };
@@ -62,7 +81,8 @@ export default function MembersPage() {
       email: form.get('email'),
       phone: form.get('phone'),
       groupIds: form.getAll('groupIds').map(Number),
-      birthday: form.get('birthday') || null,
+      birthday: birthday || null,
+      age: age,
       gender: form.get('gender') || null,
       membershipType: form.get('membershipType') || null,
       maritalStatus: form.get('maritalStatus') || null,
@@ -175,6 +195,7 @@ export default function MembersPage() {
               { key: 'gender', label: 'Gender', render: (m) => (m.gender ? <Badge variant='neutral'>{m.gender === 'male' ? 'Male' : 'Female'}</Badge> : '—') },
               { key: 'status', label: 'Status', render: (m) => <Badge variant={m.status}>{m.status === 'active' ? 'Active' : 'Inactive'}</Badge> },
               { key: 'last_attended', label: 'Last attended', render: (m) => (m.last_attended ? formatShortDate(m.last_attended) : 'Never') },
+              { key: 'age', label: 'Age', className: 'num', render: (m) => (m.age != null ? `${m.age}` : '—') },
               {
                 key: 'consecutive_absences',
                 label: 'Absences',
@@ -234,9 +255,24 @@ export default function MembersPage() {
             </div>
           </Field>
           <div className='field-row'>
-            <Field label='Birthday' id='m-birthday' hint='Used for the birthday message.'>
-              <Input id='m-birthday' name='birthday' type='date' defaultValue={editing ? editing.birthday || '' : ''} />
+            <Field label='Birthday' id='m-birthday' hint='Age is calculated automatically.'>
+              <Input
+                id='m-birthday'
+                name='birthday'
+                type='date'
+                value={birthday}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setBirthday(v);
+                  setAge(calcAge(v));
+                }}
+              />
             </Field>
+            <Field label='Age' id='m-age' hint='Auto-calculated from birthday.'>
+              <Input id='m-age' name='age' type='number' min={0} readOnly placeholder={age === null ? '—' : ''} value={age === null || age === undefined ? '' : age} />
+            </Field>
+          </div>
+          <div className='field-row'>
             <Field label='Gender' id='m-gender'>
               <Select id='m-gender' name='gender' defaultValue={editing ? editing.gender || '' : ''}>
                 <option value=''>Not specified</option>

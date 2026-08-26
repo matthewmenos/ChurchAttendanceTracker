@@ -82,7 +82,7 @@ export default function MemberDetailPage() {
           </div>
           <p className='muted'>
             {member.email || 'No email on file'} · {member.phone || 'No phone on file'}<br />
-            {member.birthday ? <>Birthday: {formatDate(member.birthday)}<br /></> : null}
+            {member.birthday ? <>Birthday: {formatDate(member.birthday)} · Age: {member.age ?? '—'}<br /></> : null}
             {member.profession ? <>Profession: {member.profession}<br /></> : null}
             {member.residence ? <>Residence: {member.residence}<br /></> : null}
             Last attended: {member.last_attended ? formatDate(member.last_attended) : 'Never'}

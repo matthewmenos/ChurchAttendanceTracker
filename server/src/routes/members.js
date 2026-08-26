@@ -8,6 +8,21 @@ const router = express.Router();
 // All member management is admin-only, enforced on the server.
 router.use(authenticate, requireAdmin);
 
+/** Whole years between a birthday and today (UTC). Returns null if unset/invalid. */
+function ageFromBirthday(birthday) {
+  if (!birthday) return null;
+  const b = new Date(`${String(birthday).slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(b.getTime())) return null;
+  const today = new Date();
+  const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  let age = d.getUTCFullYear() - b.getUTCFullYear();
+  const beforeBirthday =
+    d.getUTCMonth() < b.getUTCMonth() ||
+    (d.getUTCMonth() === b.getUTCMonth() && d.getUTCDate() < b.getUTCDate());
+  if (beforeBirthday) age -= 1;
+  return age;
+}
+
 function cleanMember(m) {
   const groups = m.groups || [];
   return {
@@ -16,6 +31,7 @@ function cleanMember(m) {
     email: m.email,
     phone: m.phone,
     birthday: m.birthday || null,
+    age: m.age || null,
     gender: m.gender || null,
     membership_type: m.membership_type || null,
     marital_status: m.marital_status || null,
@@ -137,13 +153,14 @@ router.post('/', asyncHandler(async (req, res) => {
   const groupIds = await ensureGroups(readGroupIds(req.body));
   const status = vEnum(req.body, 'status', ['active', 'inactive']) || 'active';
   const notes = vStr(req.body, 'notes', { max: 1000 });
+  const age = ageFromBirthday(birthday);
 
   try {
     const { rows } = await db.query(
-      `INSERT INTO members (full_name, email, phone, birthday, gender, membership_type, marital_status, profession, residence, status, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `INSERT INTO members (full_name, email, phone, birthday, age, gender, membership_type, marital_status, profession, residence, status, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id`,
-      [fullName, email, phone, birthday, gender, membershipType, maritalStatus, profession, residence, status, notes]
+      [fullName, email, phone, birthday, age, gender, membershipType, maritalStatus, profession, residence, status, notes]
     );
     await setMemberGroups(rows[0].id, groupIds);
     res.status(201).json({ member: cleanMember(await findMember(rows[0].id)) });
@@ -176,15 +193,16 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const groupIds = await ensureGroups(readGroupIds(req.body));
   const status = vEnum(req.body, 'status', ['active', 'inactive']) || existing.status;
   const notes = vStr(req.body, 'notes', { max: 1000 });
+  const age = ageFromBirthday(birthday);
 
   try {
     await db.query(
       `UPDATE members
-          SET full_name = $1, email = $2, phone = $3, birthday = $4, gender = $5,
-              membership_type = $6, marital_status = $7, profession = $8, residence = $9,
-              status = $10, notes = $11
-        WHERE id = $12`,
-      [fullName, email, phone, birthday, gender, membershipType, maritalStatus, profession, residence, status, notes, id]
+          SET full_name = $1, email = $2, phone = $3, birthday = $4, age = $5, gender = $6,
+              membership_type = $7, marital_status = $8, profession = $9, residence = $10,
+              status = $11, notes = $12
+        WHERE id = $13`,
+      [fullName, email, phone, birthday, age, gender, membershipType, maritalStatus, profession, residence, status, notes, id]
     );
     await setMemberGroups(id, groupIds);
     res.json({ member: cleanMember(await findMember(id)) });
