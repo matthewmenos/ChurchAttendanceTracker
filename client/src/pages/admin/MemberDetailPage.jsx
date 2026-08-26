@@ -75,11 +75,16 @@ export default function MemberDetailPage() {
             <Badge variant={member.status}>{member.status === 'active' ? 'Active' : 'Inactive'}</Badge>
             {member.gender && <Badge variant='neutral'>{member.gender === 'male' ? 'Male' : 'Female'}</Badge>}
             {(member.groups || []).map((g) => <Badge key={g.id} variant='info'>{g.name}</Badge>)}
+            {member.membership_type && member.membership_type === 'new_convert' && <Badge variant='warn'>New convert</Badge>}
+            {member.membership_type && member.membership_type === 'existing' && <Badge variant='neutral'>Existing member</Badge>}
+            {member.marital_status && <Badge variant='neutral'>{member.marital_status}</Badge>}
             {member.consecutive_absences >= 3 && <Badge variant='high'>{member.consecutive_absences} weeks absent <IconTriangleAlert size={11} /></Badge>}
           </div>
           <p className='muted'>
             {member.email || 'No email on file'} · {member.phone || 'No phone on file'}<br />
             {member.birthday ? <>Birthday: {formatDate(member.birthday)}<br /></> : null}
+            {member.profession ? <>Profession: {member.profession}<br /></> : null}
+            {member.residence ? <>Residence: {member.residence}<br /></> : null}
             Last attended: {member.last_attended ? formatDate(member.last_attended) : 'Never'}
           </p>
           {member.notes && <p className='member-notes'>{member.notes}</p>}

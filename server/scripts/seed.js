@@ -125,16 +125,23 @@ async function main() {
   const memberIds = [];
   let phoneSeq = 101;
   const today = new Date();
-  for (const [fullName, groupName, hasEmail, gender] of memberDefs) {
+  const maritalPool = ['single', 'married', 'single', 'married', 'widowed', 'divorced'];
+  const professionPool = ['Teacher', 'Nurse', 'Farmer', 'Trader', 'Engineer', 'Student', 'Accountant', 'Pastor', 'Driver', 'Tailor', 'Carpenter', 'Banker'];
+  const residencePool = ['Agona', 'Busua', 'Dixcove', 'Axim', 'Essikado', 'Takoradi', 'Half Assini', 'Nsuaem'];
+  for (const [i, [fullName, groupName, hasEmail, gender]] of memberDefs.entries()) {
     const slug = fullName.toLowerCase().replace(/[^a-z ]/g, '').split(/ +/).join('.');
     const { rows } = await db.query(
-      `INSERT INTO members (full_name, email, phone, gender)
-       VALUES ($1, $2, $3, $4) RETURNING id`,
+      `INSERT INTO members (full_name, email, phone, gender, membership_type, marital_status, profession, residence)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
       [
         fullName,
         hasEmail ? `${slug}@example.com` : null,
         `+1 555-01${phoneSeq++}`,
         gender,
+        i % 5 === 0 ? 'new_convert' : 'existing',
+        maritalPool[i % maritalPool.length],
+        professionPool[i % professionPool.length],
+        residencePool[i % residencePool.length],
       ]
     );
     const memberId = rows[0].id;

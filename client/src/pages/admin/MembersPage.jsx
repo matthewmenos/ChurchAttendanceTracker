@@ -13,7 +13,7 @@ import { Pagination, Table } from '../../components/ui/Table.jsx';
 import { formatShortDate } from '../../utils/format.js';
 import { IconUsers, IconTriangleAlert } from '../../components/ui/icons.jsx';
 
-const EMPTY_FORM = { fullName: '', email: '', phone: '', groupIds: [], birthday: '', gender: '', status: 'active', notes: '' };
+const EMPTY_FORM = { fullName: '', email: '', phone: '', groupIds: [], birthday: '', gender: '', membershipType: '', maritalStatus: '', profession: '', residence: '', status: 'active', notes: '' };
 
 export default function MembersPage() {
   const toast = useToast();
@@ -64,6 +64,10 @@ export default function MembersPage() {
       groupIds: form.getAll('groupIds').map(Number),
       birthday: form.get('birthday') || null,
       gender: form.get('gender') || null,
+      membershipType: form.get('membershipType') || null,
+      maritalStatus: form.get('maritalStatus') || null,
+      profession: form.get('profession') || null,
+      residence: form.get('residence') || null,
       status: form.get('status') || undefined,
       notes: form.get('notes'),
     };
@@ -239,6 +243,32 @@ export default function MembersPage() {
                 <option value='male'>Male</option>
                 <option value='female'>Female</option>
               </Select>
+            </Field>
+          </div>
+          <div className='field-row'>
+            <Field label='Membership type' id='m-membershipType'>
+              <Select id='m-membershipType' name='membershipType' defaultValue={editing ? editing.membership_type || '' : ''}>
+                <option value=''>Not specified</option>
+                <option value='new_convert'>New convert</option>
+                <option value='existing'>Existing</option>
+              </Select>
+            </Field>
+            <Field label='Marital status' id='m-maritalStatus'>
+              <Select id='m-maritalStatus' name='maritalStatus' defaultValue={editing ? editing.marital_status || '' : ''}>
+                <option value=''>Not specified</option>
+                <option value='single'>Single</option>
+                <option value='married'>Married</option>
+                <option value='divorced'>Divorced</option>
+                <option value='widowed'>Widowed</option>
+              </Select>
+            </Field>
+          </div>
+          <div className='field-row'>
+            <Field label='Profession' id='m-profession' hint='Optional'>
+              <Input id='m-profession' name='profession' defaultValue={editing ? editing.profession || '' : ''} maxLength={200} />
+            </Field>
+            <Field label='Place of residence' id='m-residence' hint='Optional'>
+              <Input id='m-residence' name='residence' defaultValue={editing ? editing.residence || '' : ''} maxLength={200} />
             </Field>
           </div>
           <div className='field-row'>

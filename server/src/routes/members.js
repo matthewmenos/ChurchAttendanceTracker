@@ -17,6 +17,10 @@ function cleanMember(m) {
     phone: m.phone,
     birthday: m.birthday || null,
     gender: m.gender || null,
+    membership_type: m.membership_type || null,
+    marital_status: m.marital_status || null,
+    profession: m.profession || null,
+    residence: m.residence || null,
     groups,
     group_ids: groups.map((g) => g.id),
     status: m.status,
@@ -126,16 +130,20 @@ router.post('/', asyncHandler(async (req, res) => {
   const phone = vStr(req.body, 'phone', { max: 40 });
   const birthday = vDate(req.body, 'birthday');
   const gender = vEnum(req.body, 'gender', ['male', 'female'], { label: 'Gender' });
+  const membershipType = vEnum(req.body, 'membershipType', ['new_convert', 'existing'], { label: 'Membership type' });
+  const maritalStatus = vEnum(req.body, 'maritalStatus', ['single', 'married', 'divorced', 'widowed'], { label: 'Marital status' });
+  const profession = vStr(req.body, 'profession', { max: 200 });
+  const residence = vStr(req.body, 'residence', { max: 200 });
   const groupIds = await ensureGroups(readGroupIds(req.body));
   const status = vEnum(req.body, 'status', ['active', 'inactive']) || 'active';
   const notes = vStr(req.body, 'notes', { max: 1000 });
 
   try {
     const { rows } = await db.query(
-      `INSERT INTO members (full_name, email, phone, birthday, gender, status, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO members (full_name, email, phone, birthday, gender, membership_type, marital_status, profession, residence, status, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
-      [fullName, email, phone, birthday, gender, status, notes]
+      [fullName, email, phone, birthday, gender, membershipType, maritalStatus, profession, residence, status, notes]
     );
     await setMemberGroups(rows[0].id, groupIds);
     res.status(201).json({ member: cleanMember(await findMember(rows[0].id)) });
@@ -161,6 +169,10 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const phone = vStr(req.body, 'phone', { max: 40 });
   const birthday = vDate(req.body, 'birthday');
   const gender = vEnum(req.body, 'gender', ['male', 'female'], { label: 'Gender' });
+  const membershipType = vEnum(req.body, 'membershipType', ['new_convert', 'existing'], { label: 'Membership type' });
+  const maritalStatus = vEnum(req.body, 'maritalStatus', ['single', 'married', 'divorced', 'widowed'], { label: 'Marital status' });
+  const profession = vStr(req.body, 'profession', { max: 200 });
+  const residence = vStr(req.body, 'residence', { max: 200 });
   const groupIds = await ensureGroups(readGroupIds(req.body));
   const status = vEnum(req.body, 'status', ['active', 'inactive']) || existing.status;
   const notes = vStr(req.body, 'notes', { max: 1000 });
@@ -168,9 +180,11 @@ router.put('/:id', asyncHandler(async (req, res) => {
   try {
     await db.query(
       `UPDATE members
-          SET full_name = $1, email = $2, phone = $3, birthday = $4, gender = $5, status = $6, notes = $7
-        WHERE id = $8`,
-      [fullName, email, phone, birthday, gender, status, notes, id]
+          SET full_name = $1, email = $2, phone = $3, birthday = $4, gender = $5,
+              membership_type = $6, marital_status = $7, profession = $8, residence = $9,
+              status = $10, notes = $11
+        WHERE id = $12`,
+      [fullName, email, phone, birthday, gender, membershipType, maritalStatus, profession, residence, status, notes, id]
     );
     await setMemberGroups(id, groupIds);
     res.json({ member: cleanMember(await findMember(id)) });
