@@ -52,7 +52,7 @@ async function bootstrap() {
     if (e.code === '23505') {
       await db.query(
         `INSERT INTO users (name, email, password_hash, role, must_change_password)
-         VALUES ($1, $2, $3, 'admin', TRUE)
+         VALUES ($1, $2, $3, 'district_admin', TRUE)
          ON CONFLICT (email) DO NOTHING`,
         [process.env.ADMIN_NAME || 'Main Admin', email, hash]
       );
