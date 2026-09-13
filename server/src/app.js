@@ -6,10 +6,16 @@ const fs = require('fs');
 const env = require('./config/env');
 const routes = require('./routes');
 const { errorHandler, notFoundHandler } = require('./middleware/error');
+const { runMigrations } = require('../scripts/migrate.js');
 
 function createApp() {
   const app = express();
   app.disable('x-powered-by');
+
+  // Run migrations on startup (non-blocking - logs errors but doesn't prevent startup)
+  runMigrations(env.databaseUrl).catch((err) => {
+    console.error('[migration] Auto-migration failed:', err.message);
+  });
 
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
