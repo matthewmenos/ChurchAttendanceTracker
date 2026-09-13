@@ -152,7 +152,7 @@ server/
     routes/     auth users members services attendance groups locations followups reports settings index
     services/   stats.js (streak recompute) settings.js
     utils/      errors validate tokens passwords
-  migrations/   001_init.sql
+  migrations/   schema.sql (complete consolidated schema; auto-applied on deploy)
   scripts/      migrate.js seed.js
   tests/        global-setup helpers auth rbac members services attendance users
 client/
@@ -258,3 +258,6 @@ COOKIE_SAMESITE=none     # required for cross-site cookies
 - Each function instance keeps its own small pg pool (max 10) — use Neon pooled
   connections to stay under connection limits.
 - Migrations never run automatically on deploy; run them manually per step 2.
+  (Now auto-applied instead: the consolidated `schema.sql` runs on the first
+  request of each serverless instance, so a deploy brings the DB up to date
+  with no manual step.)
