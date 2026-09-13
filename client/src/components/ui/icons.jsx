@@ -221,6 +221,22 @@ export function IconChevronLeft(props) {
   );
 }
 
+export function IconChevronDown(props) {
+  return (
+    <Svg {...props}>
+      <polyline points='6 9 12 15 18 9' />
+    </Svg>
+  );
+}
+
+export function IconChevronUp(props) {
+  return (
+    <Svg {...props}>
+      <polyline points='18 15 12 9 6 15' />
+    </Svg>
+  );
+}
+
 export function IconChevronRight(props) {
   return (
     <Svg {...props}>

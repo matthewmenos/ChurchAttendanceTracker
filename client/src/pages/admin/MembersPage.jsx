@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useFetch from '../../hooks/useFetch.js';
 import useDebounce from '../../hooks/useDebounce.js';
@@ -9,11 +9,79 @@ import { Alert, EmptyState, ErrorState, LoadingBlock } from '../../components/ui
 import { Button, Field, Input, Select, Textarea } from '../../components/ui/forms.jsx';
 import { Modal, ConfirmDialog } from '../../components/ui/Modal.jsx';
 import SearchInput from '../../components/ui/SearchInput.jsx';
-import { Pagination, Table } from '../../components/ui/Table.jsx';
+import { Pagination } from '../../components/ui/Table.jsx';
 import { formatShortDate } from '../../utils/format.js';
-import { IconUsers, IconTriangleAlert } from '../../components/ui/icons.jsx';
+import { IconUsers, IconTriangleAlert, IconChevronDown } from '../../components/ui/icons.jsx';
 
 const EMPTY_FORM = { fullName: '', email: '', phone: '', groupIds: [], birthday: '', gender: '', membershipType: '', maritalStatus: '', profession: '', residence: '', status: 'active', notes: '' };
+
+function MemberCard({ member: m, expanded, onToggle, onEdit, onToggleStatus }) {
+  const genderLabel = m.gender === 'male' ? 'Male' : m.gender === 'female' ? 'Female' : null;
+  const membershipLabel = m.membership_type === 'new_convert' ? 'New convert' : m.membership_type === 'existing' ? 'Existing' : null;
+  const maritalLabel = m.marital_status ? ({ single: 'Single', married: 'Married', divorced: 'Divorced', widowed: 'Widowed' }[m.marital_status] || m.marital_status) : null;
+
+  return (
+    <div className={`member-card ${expanded ? 'expanded' : ''}`}>
+      <button type='button' className='member-card-header' onClick={onToggle} aria-expanded={expanded}>
+        <span className='member-card-avatar'>
+          <Avatar name={m.full_name} size='sm' />
+        </span>
+        <span className='member-card-info'>
+          <span className='member-card-name'>{m.full_name}</span>
+          <span className='member-card-meta'>
+            {m.phone && <span>{m.phone}</span>}
+            {m.email && <span>{m.email}</span>}
+          </span>
+        </span>
+        <span className='member-card-badges'>
+          <Badge variant={m.status}>{m.status === 'active' ? 'Active' : 'Inactive'}</Badge>
+          {m.consecutive_absences >= 3 && <Badge variant='high'>{m.consecutive_absences} <IconTriangleAlert size={11} /></Badge>}
+        </span>
+        <span className={`member-card-chevron ${expanded ? 'rotated' : ''}`}>
+          <IconChevronDown size={18} />
+        </span>
+      </button>
+
+      {expanded && (
+        <div className='member-card-body'>
+          <div className='member-card-details'>
+            <DetailRow label='Groups' value={(m.groups && m.groups.length) ? m.groups.map((g) => <Badge key={g.id} variant='info'>{g.name}</Badge>) : '—'} />
+            <DetailRow label='Gender' value={genderLabel || '—'} />
+            <DetailRow label='Birthday' value={m.birthday ? formatShortDate(m.birthday) : '—'} />
+            <DetailRow label='Age' value={m.age != null ? `${m.age}` : '—'} />
+            <DetailRow label='Membership' value={membershipLabel || '—'} />
+            <DetailRow label='Marital status' value={maritalLabel || '—'} />
+            <DetailRow label='Profession' value={m.profession || '—'} />
+            <DetailRow label='Residence' value={m.residence || '—'} />
+            <DetailRow label='Last attended' value={m.last_attended ? formatShortDate(m.last_attended) : 'Never'} />
+            <DetailRow label='Absences' value={String(m.consecutive_absences || 0)} />
+            {m.notes && <DetailRow label='Notes' value={m.notes} />}
+          </div>
+          <div className='member-card-actions'>
+            <Link className='btn btn-secondary btn-sm' to={`/admin/members/${m.id}`}>View</Link>
+            <button type='button' className='btn btn-secondary btn-sm' onClick={onEdit}>Edit</button>
+            <button
+              type='button'
+              className={'btn btn-sm ' + (m.status === 'active' ? 'btn-ghost-danger' : 'btn-secondary')}
+              onClick={onToggleStatus}
+            >
+              {m.status === 'active' ? 'Deactivate' : 'Activate'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailRow({ label, value }) {
+  return (
+    <div className='detail-row'>
+      <span className='detail-label'>{label}</span>
+      <span className='detail-value'>{value}</span>
+    </div>
+  );
+}
 
 export default function MembersPage() {
   const toast = useToast();
@@ -29,6 +97,7 @@ export default function MembersPage() {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [expandedId, setExpandedId] = useState(null); // which member card is expanded
   // Birthday is a controlled input so we can auto-fill the read-only Age field.
   const [birthday, setBirthday] = useState('');
   const [age, setAge] = useState(null);
@@ -167,63 +236,20 @@ export default function MembersPage() {
       )}
 
       {items.length > 0 && (
-        <div className='card'>
-          <Table
-            caption='Church members'
-            rows={items}
-            getRowKey={(r) => r.id}
-            columns={[
-              {
-                key: 'full_name',
-                label: 'Member',
-                render: (m) => (
-                  <span className='cell-person'>
-                    <Avatar name={m.full_name} size='sm' />
-                    <span>
-                      <Link to={`/admin/members/${m.id}`} className='row-title'>{m.full_name}</Link>
-                      <span className='muted small block'>{m.email || 'No email'}</span>
-                    </span>
-                  </span>
-                ),
-              },
-              { key: 'group_name', label: 'Groups', render: (m) => (
-                (m.groups && m.groups.length)
-                  ? m.groups.map((g) => <Badge key={g.id} variant='info'>{g.name}</Badge>)
-                  : '—'
-              ) },
-              { key: 'phone', label: 'Phone', render: (m) => m.phone || '—' },
-              { key: 'gender', label: 'Gender', render: (m) => (m.gender ? <Badge variant='neutral'>{m.gender === 'male' ? 'Male' : 'Female'}</Badge> : '—') },
-              { key: 'status', label: 'Status', render: (m) => <Badge variant={m.status}>{m.status === 'active' ? 'Active' : 'Inactive'}</Badge> },
-              { key: 'last_attended', label: 'Last attended', render: (m) => (m.last_attended ? formatShortDate(m.last_attended) : 'Never') },
-              { key: 'age', label: 'Age', className: 'num', render: (m) => (m.age != null ? `${m.age}` : '—') },
-              {
-                key: 'consecutive_absences',
-                label: 'Absences',
-                className: 'num',
-                render: (m) => (m.consecutive_absences >= 3 ? <Badge variant='high'>{m.consecutive_absences} <IconTriangleAlert size={11} /></Badge> : String(m.consecutive_absences)),
-              },
-              {
-                key: 'actions',
-                label: 'Actions',
-                render: (m) => (
-                  <span className='row-actions'>
-                    <Link className='btn btn-ghost btn-sm' to={`/admin/members/${m.id}`}>View</Link>
-                    <button type='button' className='btn btn-ghost btn-sm' onClick={() => openEdit(m)}>Edit</button>
-                    <button
-                      type='button'
-                      className={'btn btn-sm ' + (m.status === 'active' ? 'btn-ghost-danger' : 'btn-ghost')}
-                      onClick={() => setConfirmTarget(m)}
-                    >
-                      {m.status === 'active' ? 'Deactivate' : 'Activate'}
-                    </button>
-                  </span>
-                ),
-              },
-            ]}
-          />
-          <Pagination page={page} pageSize={12} total={total} onPage={setPage} />
+        <div className='member-card-grid'>
+          {items.map((m) => (
+            <MemberCard
+              key={m.id}
+              member={m}
+              expanded={expandedId === m.id}
+              onToggle={() => setExpandedId(expandedId === m.id ? null : m.id)}
+              onEdit={() => openEdit(m)}
+              onToggleStatus={() => setConfirmTarget(m)}
+            />
+          ))}
         </div>
       )}
+      {items.length > 0 && <Pagination page={page} pageSize={12} total={total} onPage={setPage} />}
 
       <Modal open={formOpen} title={editing ? `Edit — ${editing.full_name}` : 'Add a member'} onClose={() => setFormOpen(false)} width='520px'>
         <form onSubmit={saveMember} noValidate>
