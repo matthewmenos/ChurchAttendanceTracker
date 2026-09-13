@@ -2,7 +2,7 @@ const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vEnum, vDate } = require('../utils/validate');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, getBranchFilter } = require('../middleware/auth');
 const { recomputeMemberStats, getServiceTotals } = require('../services/stats');
 const { getSettingsMap } = require('../services/settings');
 const { syncFollowUpForMember } = require('../services/followups');
@@ -18,9 +18,11 @@ const router = express.Router();
 async function serviceById(id) {
   const { rows } = await db.query(
     `SELECT s.id, s.service_date, s.service_name, s.start_time, s.total_headcount,
-            s.attendance_closed, s.attendance_close_time, l.name AS location_name
+            s.attendance_closed, s.attendance_close_time, l.name AS location_name,
+            s.branch_id, b.name AS branch_name
        FROM services s
        LEFT JOIN locations l ON l.id = s.location_id
+       LEFT JOIN branches b ON b.id = s.branch_id
       WHERE s.id = $1`,
     [id]
   );
@@ -64,6 +66,12 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
   const serviceId = Number(req.params.serviceId);
   const service = await serviceById(serviceId);
   if (!service) throw new ApiError(404, 'Service not found.');
+
+  // Check branch access
+  const branchId = getBranchFilter(req);
+  if (branchId && service.branch_id !== branchId) {
+    throw new ApiError(403, 'You do not have access to this service.');
+  }
 
   const search = vStr(req.query, 'search', { max: 100 }) || '';
   const groupId = vInt(req.query, 'groupId');

@@ -2,7 +2,7 @@ const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vDate, vTime } = require('../utils/validate');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, getBranchFilter } = require('../middleware/auth');
 const { getServiceTotals } = require('../services/stats');
 const { syncFollowUps } = require('../services/followups');
 
@@ -10,7 +10,7 @@ const router = express.Router();
 
 const LIST_SELECT = `
   SELECT s.id, s.service_date, s.service_name, s.start_time, s.total_headcount, s.notes,
-         s.location_id, l.name AS location_name, s.created_at, s.updated_at,
+         s.location_id, l.name AS location_name, s.branch_id, b.name AS branch_name, s.created_at, s.updated_at,
          s.attendance_closed, s.attendance_closed_at, cb.name AS attendance_closed_by_name,
          s.attendance_close_time,
          COALESCE(a.present, 0)::int AS present,
@@ -19,6 +19,7 @@ const LIST_SELECT = `
          COALESCE(a.marked, 0)::int  AS marked
     FROM services s
     LEFT JOIN locations l ON l.id = s.location_id
+    LEFT JOIN branches b ON b.id = s.branch_id
     LEFT JOIN users cb ON cb.id = s.attendance_closed_by
     LEFT JOIN (
       SELECT service_id,
@@ -84,6 +85,14 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
 
   const where = [];
   const params = [];
+  
+  // Branch filtering
+  const branchId = getBranchFilter(req);
+  if (branchId) {
+    params.push(branchId);
+    where.push(`s.branch_id = $${params.length}`);
+  }
+  
   if (search) {
     params.push(`%${search}%`);
     where.push(`s.service_name ILIKE $${params.length}`);
@@ -115,11 +124,20 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const notes = vStr(req.body, 'notes', { max: 500 });
   const closeTime = readCloseTime(req.body);
 
+  // Determine branch_id
+  let branchId = req.user.branch_id;
+  if (req.user.role === 'district_admin' && req.body.branchId) {
+    branchId = Number(req.body.branchId);
+  }
+  if (!branchId) {
+    throw new ApiError(400, 'Cannot create service: no branch assigned.');
+  }
+
   const { rows } = await db.query(
-    `INSERT INTO services (service_date, service_name, start_time, location_id, total_headcount, notes, created_by, attendance_close_time)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO services (service_date, service_name, start_time, location_id, total_headcount, notes, created_by, attendance_close_time, branch_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING id`,
-    [serviceDate, serviceName, startTime, locationId, headcount, notes, req.user.id, closeTime]
+    [serviceDate, serviceName, startTime, locationId, headcount, notes, req.user.id, closeTime, branchId]
   );
   res.status(201).json({ service: withFlags(await serviceById(rows[0].id)) });
 }));

@@ -24,7 +24,7 @@ async function authenticate(req, res, next) {
       throw new ApiError(401, 'Your session has expired. Please sign in again.');
     }
     const { rows } = await db.query(
-      'SELECT id, name, email, role, status, must_change_password, last_login_at FROM users WHERE id = $1',
+      'SELECT id, name, email, role, status, must_change_password, last_login_at, branch_id FROM users WHERE id = $1',
       [payload.sub]
     );
     const user = rows[0];
@@ -38,10 +38,39 @@ async function authenticate(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.user || req.user.role !== 'admin') {
+  if (!req.user || !['district_admin', 'branch_admin'].includes(req.user.role)) {
     return next(new ApiError(403, 'Admin access is required for this action.'));
   }
   return next();
 }
 
-module.exports = { authenticate, requireAdmin, ACCESS_COOKIE, REFRESH_COOKIE };
+function requireDistrictAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'district_admin') {
+    return next(new ApiError(403, 'District admin access is required for this action.'));
+  }
+  return next();
+}
+
+function requireBranchAdmin(req, res, next) {
+  if (!req.user || (req.user.role !== 'branch_admin' && req.user.role !== 'district_admin')) {
+    return next(new ApiError(403, 'Branch admin access is required for this action.'));
+  }
+  return next();
+}
+
+/**
+ * Returns the branch_id filter for the current request.
+ * District admins can override with ?branchId= query param.
+ * Other users are restricted to their own branch.
+ */
+function getBranchFilter(req, params = {}) {
+  if (req.user.role === 'district_admin' && req.query.branchId) {
+    return Number(req.query.branchId);
+  }
+  if (req.user.branch_id) {
+    return req.user.branch_id;
+  }
+  return null;
+}
+
+module.exports = { authenticate, requireAdmin, requireDistrictAdmin, requireBranchAdmin, getBranchFilter, ACCESS_COOKIE, REFRESH_COOKIE };

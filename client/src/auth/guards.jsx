@@ -22,5 +22,8 @@ export function RoleRedirect() {
   const { user, initializing } = useContext(AuthContext);
   if (initializing) return <div className="page-center"><Spinner size="lg" /></div>;
   if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to={user.role === 'admin' ? '/admin' : '/usher'} replace />;
+  if (user.role === 'district_admin' || user.role === 'branch_admin') {
+    return <Navigate to="/admin" replace />;
+  }
+  return <Navigate to="/usher" replace />;
 }

@@ -2,7 +2,7 @@ const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vEmail, vInt, vEnum, vDate } = require('../utils/validate');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, getBranchFilter } = require('../middleware/auth');
 
 const router = express.Router();
 // All member management is admin-only, enforced on the server.
@@ -102,6 +102,14 @@ router.get('/', asyncHandler(async (req, res) => {
 
   const where = [];
   const params = [];
+  
+  // Branch filtering
+  const branchId = getBranchFilter(req);
+  if (branchId) {
+    params.push(branchId);
+    where.push(`m.branch_id = $${params.length}`);
+  }
+  
   if (search) {
     params.push(`%${search}%`);
     const n = params.length;
@@ -155,12 +163,21 @@ router.post('/', asyncHandler(async (req, res) => {
   const notes = vStr(req.body, 'notes', { max: 1000 });
   const age = ageFromBirthday(birthday);
 
+  // Determine branch_id - use user's branch or allow district admin to specify
+  let branchId = req.user.branch_id;
+  if (req.user.role === 'district_admin' && req.body.branchId) {
+    branchId = Number(req.body.branchId);
+  }
+  if (!branchId) {
+    throw new ApiError(400, 'Cannot create member: no branch assigned. Please contact your administrator.');
+  }
+
   try {
     const { rows } = await db.query(
-      `INSERT INTO members (full_name, email, phone, birthday, age, gender, membership_type, marital_status, profession, residence, status, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO members (full_name, email, phone, birthday, age, gender, membership_type, marital_status, profession, residence, status, notes, branch_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING id`,
-      [fullName, email, phone, birthday, age, gender, membershipType, maritalStatus, profession, residence, status, notes]
+      [fullName, email, phone, birthday, age, gender, membershipType, maritalStatus, profession, residence, status, notes, branchId]
     );
     await setMemberGroups(rows[0].id, groupIds);
     res.status(201).json({ member: cleanMember(await findMember(rows[0].id)) });
@@ -173,6 +190,13 @@ router.post('/', asyncHandler(async (req, res) => {
 router.get('/:id', asyncHandler(async (req, res) => {
   const member = await findMember(Number(req.params.id));
   if (!member) throw new ApiError(404, 'Member not found.');
+  
+  // Check branch access
+  const branchId = getBranchFilter(req);
+  if (branchId && member.branch_id !== branchId) {
+    throw new ApiError(403, 'You do not have access to this member.');
+  }
+  
   res.json({ member: cleanMember(member) });
 }));
 
@@ -180,6 +204,12 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const existing = await findMember(id);
   if (!existing) throw new ApiError(404, 'Member not found.');
+  
+  // Check branch access
+  const branchId = getBranchFilter(req);
+  if (branchId && existing.branch_id !== branchId) {
+    throw new ApiError(403, 'You do not have access to this member.');
+  }
 
   const fullName = vStr(req.body, 'fullName', { required: true, max: 120, label: 'Full name' });
   const email = vEmail(req.body, 'email');

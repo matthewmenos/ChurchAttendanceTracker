@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { Avatar, Badge } from '../ui/display.jsx';
 import { Alert } from '../ui/feedback.jsx';
@@ -7,6 +7,7 @@ import { Button } from '../ui/forms.jsx';
 import Logo from '../ui/Logo.jsx';
 import ChangePasswordModal from '../ChangePasswordModal.jsx';
 import InstallPrompt from '../InstallPrompt.jsx';
+import BranchSelector from '../BranchSelector.jsx';
 import {
   IconChart,
   IconClipboardCheck,
@@ -15,6 +16,7 @@ import {
   IconTrendingUp,
   IconShield,
   IconSettings,
+  IconMapPin,
   IconMenu,
 } from '../ui/icons.jsx';
 
@@ -29,11 +31,21 @@ const NAV_ITEMS = [
   { to: '/admin/settings', label: 'Settings', icon: IconSettings },
 ];
 
+const DISTRICT_NAV_ITEMS = [
+  { to: '/admin/branches', label: 'Branches', icon: IconMapPin },
+];
+
 export default function AdminLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, branches, currentBranchId } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+
+  // Add branches nav item for district admin
+  const navItems = user?.role === 'district_admin' 
+    ? [...DISTRICT_NAV_ITEMS, ...NAV_ITEMS]
+    : NAV_ITEMS;
 
   useEffect(() => {
     setNavOpen(false);
@@ -47,7 +59,7 @@ export default function AdminLayout() {
 
   const nav = (
     <nav className='sidebar-nav' aria-label='Admin navigation'>
-      {NAV_ITEMS.map((item) => (
+      {navItems.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
@@ -77,7 +89,9 @@ export default function AdminLayout() {
             <Avatar name={user ? user.name : ''} />
             <span className='user-meta'>
               <strong>{user ? user.name : ''}</strong>
-              <Badge variant={user && user.role === 'admin' ? 'info' : 'neutral'}>Admin</Badge>
+              <Badge variant={user && user.role === 'district_admin' ? 'info' : 'neutral'}>
+                {user?.role === 'district_admin' ? 'District' : user?.role === 'branch_admin' ? 'Branch' : 'Admin'}
+              </Badge>
             </span>
           </div>
           <button type='button' className='btn btn-ghost btn-sm btn-block' onClick={() => setPwOpen(true)}>
@@ -102,6 +116,7 @@ export default function AdminLayout() {
             <IconMenu size={22} />
           </button>
           <span className='topbar-title'>Church Attendance Tracker</span>
+          <BranchSelector />
           <InstallPrompt />
           <span className='topbar-user' title={user ? user.email : ''}>{user ? user.name : ''}</span>
         </header>

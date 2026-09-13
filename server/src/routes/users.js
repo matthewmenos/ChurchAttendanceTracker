@@ -1,9 +1,9 @@
 const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
-const { vEmail, vStr, vEnum } = require('../utils/validate');
+const { vEmail, vStr, vEnum, vInt } = require('../utils/validate');
 const { hashPassword, generateTempPassword } = require('../utils/passwords');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, getBranchFilter } = require('../middleware/auth');
 const { sha256 } = require('../utils/tokens');
 
 const router = express.Router();
@@ -19,6 +19,8 @@ function cleanUser(u) {
     phone: u.phone,
     role: u.role,
     status: u.status,
+    branch_id: u.branch_id,
+    branch_name: u.branch_name || null,
     must_change_password: u.must_change_password,
     last_login_at: u.last_login_at,
     created_by_name: u.created_by_name || null,
@@ -29,10 +31,11 @@ function cleanUser(u) {
 
 async function findUser(id) {
   const { rows } = await db.query(
-    `SELECT u.*, c.name AS created_by_name,
+    `SELECT u.*, c.name AS created_by_name, b.name AS branch_name,
             (SELECT COUNT(*) FROM attendance a WHERE a.recorded_by_user_id = u.id) AS records_created
        FROM users u
        LEFT JOIN users c ON c.id = u.created_by
+       LEFT JOIN branches b ON b.id = u.branch_id
       WHERE u.id = $1`,
     [id]
   );
@@ -57,13 +60,33 @@ async function checkUsername(raw, currentId = null) {
   return value;
 }
 router.get('/', asyncHandler(async (req, res) => {
-  const { rows } = await db.query(
-    `SELECT u.*, c.name AS created_by_name,
+  const branchFilter = getBranchFilter(req);
+  
+  let query = `SELECT u.*, c.name AS created_by_name, b.name AS branch_name,
             (SELECT COUNT(*) FROM attendance a WHERE a.recorded_by_user_id = u.id) AS records_created
-       FROM users u
-       LEFT JOIN users c ON c.id = u.created_by
-      ORDER BY CASE u.role WHEN 'admin' THEN 0 ELSE 1 END, u.name ASC`
-  );
+         FROM users u
+         LEFT JOIN users c ON c.id = u.created_by
+         LEFT JOIN branches b ON b.id = u.branch_id`;
+  
+  const params = [];
+  const conditions = [];
+  
+  // Filter by branch for non-district admins
+  if (req.user.role !== 'district_admin' && req.user.branch_id) {
+    conditions.push(`u.branch_id = $${params.length + 1}`);
+    params.push(req.user.branch_id);
+  } else if (req.query.branchId) {
+    conditions.push(`u.branch_id = $${params.length + 1}`);
+    params.push(Number(req.query.branchId));
+  }
+  
+  if (conditions.length > 0) {
+    query += ` WHERE ${conditions.join(' AND ')}`;
+  }
+  
+  query += ` ORDER BY CASE u.role WHEN 'district_admin' THEN 0 WHEN 'branch_admin' THEN 1 ELSE 2 END, u.name ASC`;
+  
+  const { rows } = await db.query(query, params);
   res.json({ items: rows.map(cleanUser), total: rows.length });
 }));
 
@@ -71,7 +94,27 @@ router.post('/', asyncHandler(async (req, res) => {
   const name = vStr(req.body, 'name', { required: true, max: 120, label: 'Full name' });
   const email = vEmail(req.body, 'email', { required: true });
   const phone = vStr(req.body, 'phone', { max: 40 });
-  const role = vEnum(req.body, 'role', ['admin', 'usher']) || 'usher';
+  const role = vEnum(req.body, 'role', ['district_admin', 'branch_admin', 'usher']) || 'usher';
+  const branchId = vInt(req.body, 'branchId');
+
+  // Validate branch_id based on role
+  if (role === 'district_admin' && branchId) {
+    throw new ApiError(400, 'District admin should not be assigned to a branch.');
+  }
+  if ((role === 'branch_admin' || role === 'usher') && !branchId) {
+    throw new ApiError(400, 'Branch admin and usher must be assigned to a branch.');
+  }
+
+  // Verify branch exists
+  if (branchId) {
+    const branchCheck = await db.query('SELECT id FROM branches WHERE id = $1 AND status = ''active''', [branchId]);
+    if (!branchCheck.rows.length) throw new ApiError(400, 'Invalid or inactive branch.');
+  }
+
+  // Branch admin can only create users in their own branch
+  if (req.user.role === 'branch_admin' && branchId !== req.user.branch_id) {
+    throw new ApiError(403, 'You can only create users in your own branch.');
+  }
 
   const dup = await db.query('SELECT id FROM users WHERE lower(email) = $1', [email]);
   if (dup.rows.length) throw new ApiError(409, 'A user account with this email already exists.');
@@ -81,10 +124,10 @@ router.post('/', asyncHandler(async (req, res) => {
   const temporaryPassword = generateTempPassword();
   const hash = await hashPassword(temporaryPassword);
   const { rows } = await db.query(
-    `INSERT INTO users (name, email, phone, username, password_hash, role, must_change_password, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7)
+    `INSERT INTO users (name, email, phone, username, password_hash, role, must_change_password, created_by, branch_id)
+     VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8)
      RETURNING id`,
-    [name, email, phone, username, hash, role, req.user.id]
+    [name, email, phone, username, hash, role, req.user.id, branchId || null]
   );
   const user = await findUser(rows[0].id);
   res.status(201).json({ user: cleanUser(user), temporaryPassword });
@@ -98,11 +141,30 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const name = vStr(req.body, 'name', { required: true, max: 120, label: 'Full name' });
   const email = vEmail(req.body, 'email', { required: true });
   const phone = vStr(req.body, 'phone', { max: 40 });
+  const branchId = vInt(req.body, 'branchId');
+
+  // Validate branch change
+  if (branchId !== undefined && branchId !== existing.branch_id) {
+    if (existing.role === 'district_admin') {
+      throw new ApiError(400, 'District admin cannot be assigned to a branch.');
+    }
+    if (branchId) {
+      const branchCheck = await db.query('SELECT id FROM branches WHERE id = $1 AND status = ''active''', [branchId]);
+      if (!branchCheck.rows.length) throw new ApiError(400, 'Invalid or inactive branch.');
+    }
+    // Branch admin can only assign to their own branch
+    if (req.user.role === 'branch_admin' && branchId !== req.user.branch_id) {
+      throw new ApiError(403, 'You can only assign users to your own branch.');
+    }
+  }
 
   const dup = await db.query('SELECT id FROM users WHERE lower(email) = $1 AND id <> $2', [email, id]);
   if (dup.rows.length) throw new ApiError(409, 'Another account already uses this email.');
 
-  await db.query('UPDATE users SET name = $1, email = $2, phone = $3 WHERE id = $4', [name, email, phone, id]);
+  await db.query(
+    'UPDATE users SET name = $1, email = $2, phone = $3, branch_id = $4 WHERE id = $5',
+    [name, email, phone, branchId !== undefined ? branchId : existing.branch_id, id]
+  );
   res.json({ user: cleanUser(await findUser(id)) });
 }));
 
@@ -114,9 +176,9 @@ router.patch('/:id/status', asyncHandler(async (req, res) => {
   if (id === req.user.id && status === 'inactive') {
     throw new ApiError(400, 'You cannot deactivate your own account.');
   }
-  if (existing.role === 'admin' && status === 'inactive') {
+  if (['district_admin', 'branch_admin'].includes(existing.role) && status === 'inactive') {
     const { rows } = await db.query(
-      `SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND status = 'active' AND id <> $1`,
+      `SELECT COUNT(*) AS n FROM users WHERE role IN ('district_admin', 'branch_admin') AND status = 'active' AND id <> $1`,
       [id]
     );
     if (Number(rows[0].n) === 0) {

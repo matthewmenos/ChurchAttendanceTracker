@@ -1,8 +1,8 @@
 const express = require('express');
 const db = require('../config/db');
 const { asyncHandler } = require('../utils/errors');
-const { vDate } = require('../utils/validate');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { vDate, vInt } = require('../utils/validate');
+const { authenticate, requireAdmin, getBranchFilter } = require('../middleware/auth');
 const { getServiceTotals } = require('../services/stats');
 
 const router = express.Router();
