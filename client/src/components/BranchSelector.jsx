@@ -1,4 +1,4 @@
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../auth/AuthContext.jsx';
 
 export default function BranchSelector() {
   const { user, branches, currentBranchId, switchBranch } = useAuth();

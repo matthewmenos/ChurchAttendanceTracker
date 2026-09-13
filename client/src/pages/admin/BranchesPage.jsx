@@ -141,7 +141,31 @@ export default function BranchesPage() {
                   </td>
                 </tr>
               ))}
-            </tbody>
+                        </tbody>
           </table>
         </div>
       )}
+      <Modal open={formOpen} title={editing ? 'Edit Branch' : 'Add Branch'} onClose={() => setFormOpen(false)}>
+        <form onSubmit={saveBranch}>
+          {formError && <Alert variant="error">{formError}</Alert>}
+          <Field label="Name" id="b-name"><Input id="b-name" name="name" defaultValue={editing?.name || ''} required /></Field>
+          <Field label="Location" id="b-loc"><Input id="b-loc" name="location" defaultValue={editing?.location || ''} /></Field>
+          <Field label="Phone" id="b-phone"><Input id="b-phone" name="contactPhone" defaultValue={editing?.contact_phone || ''} /></Field>
+          <Field label="Email" id="b-email"><Input id="b-email" name="contactEmail" type="email" defaultValue={editing?.contact_email || ''} /></Field>
+          <Field label="Description" id="b-desc"><textarea id="b-desc" name="description" rows="3" defaultValue={editing?.description || ''} /></Field>
+          <Field label="Status" id="b-status">
+            <select id="b-status" name="status" defaultValue={editing?.status || 'active'}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </Field>
+          <div className="modal-actions">
+            <Button variant="secondary" type="button" onClick={() => setFormOpen(false)}>Cancel</Button>
+            <Button type="submit" loading={saving}>Save</Button>
+          </div>
+        </form>
+      </Modal>
+      <ConfirmDialog open={!!confirmDelete} title="Delete branch?" message={`Are you sure you want to delete "${confirmDelete?.name}"?`} confirmLabel="Delete" danger onConfirm={deleteBranch} onCancel={() => setConfirmDelete(null)} />
+    </div>
+  );
+}
