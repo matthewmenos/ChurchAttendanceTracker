@@ -49,10 +49,10 @@ async function main() {
   const hash = await hashPassword(password);
   const { rows } = await db.query(
     `INSERT INTO users (name, email, username, password_hash, role, must_change_password)
-     VALUES ($1, $2, $3, $4, 'admin', TRUE)
+     VALUES ($1, $2, $3, $4, 'district_admin', TRUE)
      ON CONFLICT (email) DO UPDATE
         SET password_hash = EXCLUDED.password_hash,
-            role = 'admin',
+            role = 'district_admin',
             status = 'active',
             must_change_password = TRUE,
             username = COALESCE(EXCLUDED.username, users.username)

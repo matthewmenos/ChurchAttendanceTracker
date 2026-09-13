@@ -45,8 +45,9 @@ async function main() {
   const adminHash = await hashPassword(env.seed.adminPassword);
   const usherHash = await hashPassword(env.seed.usherPassword);
   const { rows: adminRows } = await db.query(
-    `INSERT INTO users (name, email, password_hash, role)
-     VALUES ($1, $2, $3, 'admin') RETURNING id`,
+    `INSERT INTO users (name, email, password_hash, role, branch_id)
+     VALUES ($1, $2, $3, 'district_admin', (SELECT id FROM branches WHERE name = 'Main Branch'))
+     RETURNING id`,
     [env.seed.adminName, env.seed.adminEmail.toLowerCase(), adminHash]
   );
   const adminId = adminRows[0].id;

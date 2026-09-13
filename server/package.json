@@ -9,6 +9,7 @@
     "start": "node src/index.js",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
+    "create:admin": "node scripts/create-admin.js",
     "test": "jest --runInBand --forceExit"
   },
   "dependencies": {
