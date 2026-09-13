@@ -23,14 +23,15 @@ router.get('/health', async (req, res) => {
 // No public registration endpoint exists on purpose:
 // only admins create accounts via POST /api/users.
 router.get('/branding', async (req, res) => {
+    const churchName = process.env.CHURCH_NAME || 'Church Attendance Tracker';
   try {
     const s = await getSettingsMap(db);
     res.json({
-      churchName: s.church_name || 'COP Agona Ahanta',
+      churchName: s.church_name || churchName,
       logo: s.logo || '',
     });
   } catch (e) {
-    res.json({ churchName: 'COP Agona Ahanta', logo: '' });
+    res.json({ churchName, logo: '' });
   }
 });
 router.use('/auth', require('./auth'));

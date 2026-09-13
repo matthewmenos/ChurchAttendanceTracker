@@ -16,9 +16,11 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [churchName, setChurchName] = useState('');
   const [logo, setLogo] = useState('');
+  const CHURCH_NAME = import.meta.env.VITE_CHURCH_NAME || 'Church Attendance Tracker';
+  const DISTRICT_ADMIN_ROLE = 'district_admin';
 
   useEffect(() => {
-    document.title = 'Sign in — COP Agona Ahanta';
+    document.title = `Sign in — ${CHURCH_NAME}`;
     api('/branding')
       .then((data) => {
         if (data && data.churchName) setChurchName(data.churchName);
@@ -30,7 +32,7 @@ export default function LoginPage() {
   }, []);
 
   if (!initializing && user) {
-    return <Navigate to={user.role === 'admin' ? '/admin' : '/usher'} replace />;
+    return <Navigate to={user.role === DISTRICT_ADMIN_ROLE ? '/admin' : '/usher'} replace />;
   }
 
   const submit = async (e) => {
@@ -44,7 +46,7 @@ export default function LoginPage() {
     try {
       const loggedIn = await login(email.trim(), password);
       const dest = location.state && location.state.from;
-      navigate(dest || (loggedIn.role === 'admin' ? '/admin' : '/usher'), { replace: true });
+      navigate(dest || (loggedIn.role === DISTRICT_ADMIN_ROLE ? '/admin' : '/usher'), { replace: true });
     } catch (err) {
       setError(err.message || 'Sign-in failed.');
     } finally {
@@ -57,7 +59,7 @@ export default function LoginPage() {
       <div className='login-card card'>
         <div className='login-brand'>
           {logo ? <img src={logo} alt='' className='login-logo big' aria-hidden='true' /> : <span className='brand-mark big' aria-hidden='true'><IconChurch size={28} /></span>}
-          <h1>{churchName || 'COP Agona Ahanta'}</h1>
+          <h1>{churchName || CHURCH_NAME}</h1>
           <p className='muted'>Attendance Tracker · Sign in to continue</p>
         </div>
 
