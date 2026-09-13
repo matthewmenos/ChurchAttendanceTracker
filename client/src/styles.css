@@ -422,17 +422,23 @@ table.table { width: 100%; border-collapse: collapse; font-size: .92rem; }
   padding: 6px 14px; border-radius: 999px; cursor: pointer;
 }
 .chip.active { background: var(--blue-700); border-color: var(--blue-700); color: #fff; }
-.mark-list { list-style: none; margin: 0 0 90px; padding: 0; display: grid; gap: 9px; }
+.mark-list { list-style: none; margin: 0 0 90px; padding: 0; display: grid; gap: 6px; }
 .mark-row {
-  display: flex; align-items: center; gap: 12px; padding: 10px 14px;
-  border-left-width: 5px; transition: border-color .12s, box-shadow .12s;
+  display: flex; align-items: center; gap: 10px; padding: 6px 12px;
+  border-left-width: 4px; transition: border-color .12s, box-shadow .12s;
 }
 .mark-row.marked-present { border-left-color: var(--green-600); background: linear-gradient(90deg, #f2fdf5, #fff 55%); }
 .mark-row.marked-absent { border-left-color: var(--red-600); background: linear-gradient(90deg, #fef4f4, #fff 55%); }
 .mark-row.marked-excused { border-left-color: var(--blue-600); background: linear-gradient(90deg, #f0f6ff, #fff 55%); }
-.mark-name { flex: 1; min-width: 0; display: grid; line-height: 1.3; }
+.mark-name { flex: 1; min-width: 0; display: grid; line-height: 1.25; }
+.mark-name strong { font-size: .9rem; }
+.mark-name .muted { font-size: .78rem; }
 .mark-audit { flex: none; max-width: 180px; text-align: right; }
 .note-btn.has-note { color: var(--blue-700); background: var(--blue-50); }
+.note-btn { width: 32px; height: 32px; }
+.note-btn svg { width: 16px; height: 16px; }
+.mark-row .avatar { width: 32px; height: 32px; font-size: .72rem; }
+.mark-row .seg { border-radius: 9px; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: #fff; }
 .seg-btn {
   font: inherit; font-weight: 800; cursor: pointer; border: none; background: transparent;

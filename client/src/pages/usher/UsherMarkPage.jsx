@@ -180,7 +180,6 @@ export default function UsherMarkPage() {
                     value={e.status || ''}
                     onChange={(v) => setStatus(row, v)}
                     ariaLabel={`Attendance status for ${row.full_name}`}
-                    size='lg'
                     allowClear
                     options={[['present', 'P'], ['excused', 'E']]}
                   />
@@ -201,7 +200,7 @@ export default function UsherMarkPage() {
 
       <footer className='save-bar' role='region' aria-label='Save attendance'>
         <div className='save-info'>
-          <Badge variant='info'>{(roster.data ? roster.data.markedCount : 0)} of {roster.data ? roster.data.totalEligible : rows.length} marked</Badge>
+          <Badge variant='present'>{roster.data ? roster.data.presentCount : 0} present</Badge>
           {dirtyIds.length > 0 && <Badge variant='warning'>{dirtyIds.length} unsaved</Badge>}
           {saveError && <Alert variant='error'>{saveError}</Alert>}
         </div>

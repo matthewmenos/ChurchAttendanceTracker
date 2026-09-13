@@ -122,7 +122,8 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
   // Totals across the base member pool (search/group/memberStatus, ignoring status filter).
   const { rows: baseCnt } = await db.query({
     text: `SELECT COUNT(*) AS total,
-                  COUNT(a.id) FILTER (WHERE a.id IS NOT NULL) AS marked
+                  COUNT(a.id) FILTER (WHERE a.id IS NOT NULL) AS marked,
+                  COUNT(a.id) FILTER (WHERE a.status = 'present') AS present
              FROM members m
              LEFT JOIN attendance a ON a.member_id = m.id AND a.service_id = $1
             WHERE ${baseWhereSql}`,
@@ -154,6 +155,7 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
   },
     rows: outRows,
     markedCount: Number(markedRow.marked),
+    presentCount: Number(markedRow.present),
     totalEligible: total,
     page,
     pageSize,
