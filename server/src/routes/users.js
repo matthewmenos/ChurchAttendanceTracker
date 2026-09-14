@@ -107,7 +107,7 @@ router.post('/', asyncHandler(async (req, res) => {
 
   // Verify branch exists
   if (branchId) {
-    const branchCheck = await db.query('SELECT id FROM branches WHERE id = $1 AND status = ''active''', [branchId]);
+    const branchCheck = await db.query(`SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [branchId]);
     if (!branchCheck.rows.length) throw new ApiError(400, 'Invalid or inactive branch.');
   }
 
@@ -149,7 +149,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
       throw new ApiError(400, 'District admin cannot be assigned to a branch.');
     }
     if (branchId) {
-      const branchCheck = await db.query('SELECT id FROM branches WHERE id = $1 AND status = ''active''', [branchId]);
+      const branchCheck = await db.query(`SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [branchId]);
       if (!branchCheck.rows.length) throw new ApiError(400, 'Invalid or inactive branch.');
     }
     // Branch admin can only assign to their own branch
