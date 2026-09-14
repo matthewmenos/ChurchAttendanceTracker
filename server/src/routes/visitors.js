@@ -2,7 +2,7 @@ const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vEmail, vEnum, vDate } = require('../utils/validate');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, assertBranchAccess } = require('../middleware/auth');
 const { createVisitor, listVisitors, updateVisitor, convertToMember, visitorStats } = require('../services/visitors');
 
 const router = express.Router();
@@ -11,8 +11,10 @@ const router = express.Router();
 router.post('/', authenticate, asyncHandler(async (req, res) => {
   const serviceId = vInt(req.body, 'serviceId', { label: 'Service' });
   if (serviceId) {
-    const svc = await db.query('SELECT id FROM services WHERE id = $1', [serviceId]);
+    const svc = await db.query('SELECT id, branch_id FROM services WHERE id = $1', [serviceId]);
     if (!svc.rows.length) throw new ApiError(400, 'Service not found.');
+    // Visitors belong to the branch whose service they attended.
+    assertBranchAccess(req.user, svc.rows[0].branch_id);
   }
   const fullName = vStr(req.body, 'fullName', { required: true, max: 120, label: 'Visitor name' });
   const gender = vEnum(req.body, 'gender', ['male', 'female']);
@@ -34,13 +36,15 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
 // Ushers can list visitors captured for the service they are marking,
 // or every visitor they personally captured (mine=1).
 router.get('/', authenticate, asyncHandler(async (req, res) => {
-  const isAdmin = req.user.role === 'admin';
+  const isDistrictAdmin = req.user.role === 'district_admin';
   const serviceId = vInt(req.query, 'serviceId');
   const mine = ['1', 'true'].includes(String(req.query.mine));
-  if (!isAdmin && !serviceId && !mine) throw new ApiError(400, 'Pass a serviceId or mine=1 to list visitors.');
+  if (!isDistrictAdmin && !serviceId && !mine) throw new ApiError(400, 'Pass a serviceId or mine=1 to list visitors.');
   const result = await listVisitors({
     serviceId: serviceId || undefined,
     createdBy: mine ? req.user.id : undefined,
+    // Branch admins & ushers only ever see visitors of their own branch.
+    branchId: isDistrictAdmin ? undefined : (req.user.branch_id || -1),
     followupStatus: vEnum(req.query, 'followupStatus', ['new', 'contacted', 'visited', 'joined', 'lost']),
     search: vStr(req.query, 'search', { max: 100 }) || undefined,
     page: vInt(req.query, 'page') || 1,

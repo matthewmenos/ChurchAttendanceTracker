@@ -2,7 +2,12 @@ const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vEnum, vDate } = require('../utils/validate');
-const { authenticate, requireAdmin, getBranchFilter } = require('../middleware/auth');
+const { authenticate, requireAdmin, assertBranchAccess } = require('../middleware/auth');
+
+/** District & branch admins bypass usher-specific restrictions. */
+function isAdminUser(user) {
+  return !!user && (user.role === 'district_admin' || user.role === 'branch_admin');
+}
 const { recomputeMemberStats, getServiceTotals } = require('../services/stats');
 const { getSettingsMap } = require('../services/settings');
 const { syncFollowUpForMember } = require('../services/followups');
@@ -68,10 +73,7 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
   if (!service) throw new ApiError(404, 'Service not found.');
 
   // Check branch access
-  const branchId = getBranchFilter(req);
-  if (branchId && service.branch_id !== branchId) {
-    throw new ApiError(403, 'You do not have access to this service.');
-  }
+  assertBranchAccess(req.user, service.branch_id);
 
   const search = vStr(req.query, 'search', { max: 100 }) || '';
   const groupId = vInt(req.query, 'groupId');
@@ -141,7 +143,7 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
   let outRows = rows;
 
   // Ushers only see contact details when the admin allows it.
-  if (req.user.role !== 'admin') {
+  if (!isAdminUser(req.user)) {
     const settings = await getSettingsMap(db);
     if (settings.show_member_contacts_to_ushers !== 'true') {
       outRows = outRows.map((r) => ({ ...r, phone: null, email: null }));
@@ -159,7 +161,7 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
     service: {
     ...service,
     marking_closed: isMarkingClosed(service),
-    totals: await getServiceTotals(db, serviceId),
+    totals: await getServiceTotals(db, serviceId, service.branch_id),
   },
     rows: outRows,
     markedCount: Number(markedRow.marked),
@@ -195,14 +197,14 @@ router.get('/mine', authenticate, asyncHandler(async (req, res) => {
     ...r,
     marking_locked: !!r.marking_locked,
     can_correct:
-      req.user.role === 'admin' ||
+      isAdminUser(req.user) ||
       (canCorrectSetting && !r.marking_locked && new Date(r.recorded_at).getTime() >= cutoff),
   }));
   res.json({
     items,
     correction: {
-      allowed: req.user.role === 'admin' || canCorrectSetting,
-      selfOnly: req.user.role !== 'admin',
+      allowed: isAdminUser(req.user) || canCorrectSetting,
+      selfOnly: !isAdminUser(req.user),
       windowMinutes: windowMin,
     },
   });
@@ -217,11 +219,17 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
 
   const service = await serviceById(serviceId);
   if (!service) throw new ApiError(404, 'Service not found.');
+  // Only staff of the service's branch may mark attendance for it.
+  assertBranchAccess(req.user, service.branch_id);
   if (isMarkingClosed(service)) throw new ApiError(403, closedMessage(service));
 
-  const { rows: memberRows } = await db.query('SELECT id, status FROM members WHERE id = $1', [memberId]);
+  const { rows: memberRows } = await db.query('SELECT id, status, branch_id FROM members WHERE id = $1', [memberId]);
   const member = memberRows[0];
   if (!member) throw new ApiError(404, 'Member not found.');
+  // Members belong to a branch; they can only be marked for that branch's services.
+  if (member.branch_id !== service.branch_id) {
+    throw new ApiError(400, 'This member belongs to a different branch than this service.');
+  }
   if (member.status !== 'active') {
     const existing = await db.query(
       'SELECT id FROM attendance WHERE member_id = $1 AND service_id = $2',
@@ -255,9 +263,10 @@ router.put('/:id', authenticate, asyncHandler(async (req, res) => {
   if (!record) throw new ApiError(404, 'Attendance record not found.');
 
   const svc = await serviceById(record.service_id);
+  assertBranchAccess(req.user, svc.branch_id);
   if (isMarkingClosed(svc)) throw new ApiError(403, closedMessage(svc));
 
-  if (req.user.role !== 'admin') {
+  if (!isAdminUser(req.user)) {
     const settings = await getSettingsMap(db);
     if (settings.usher_can_correct_attendance !== 'true') {
       throw new ApiError(403, 'Ushers are not currently allowed to correct attendance records.');
@@ -286,6 +295,48 @@ router.put('/:id', authenticate, asyncHandler(async (req, res) => {
   res.json({ item: await recordById(id) });
 }));
 
+/**
+ * Quick mark by member code (PIN flow). The usher types the member's code at
+ * the door; the member is marked for this service (present by default).
+ * Branch access checks apply exactly like manual marking.
+ */
+router.post('/code', authenticate, asyncHandler(async (req, res) => {
+  const serviceId = vInt(req.body, 'serviceId', { required: true, label: 'Service' });
+  const rawCode = vStr(req.body, 'code', { required: true, max: 20, label: 'Member code' });
+  const code = String(rawCode).trim().toUpperCase();
+  const status = vEnum(req.body, 'status', ['present', 'absent', 'excused']) || 'present';
+  const notes = vStr(req.body, 'notes', { max: 500 });
+
+  const service = await serviceById(serviceId);
+  if (!service) throw new ApiError(404, 'Service not found.');
+  assertBranchAccess(req.user, service.branch_id);
+  if (isMarkingClosed(service)) throw new ApiError(403, closedMessage(service));
+
+  const { rows: memberRows } = await db.query(
+    'SELECT id, status, branch_id, full_name FROM members WHERE upper(member_code) = $1',
+    [code]
+  );
+  const member = memberRows[0];
+  if (!member) throw new ApiError(404, 'No member matches that code.');
+  if (member.branch_id !== service.branch_id) {
+    throw new ApiError(400, 'This member belongs to a different branch than this service.');
+  }
+  if (member.status !== 'active') {
+    throw new ApiError(400, `${member.full_name} is inactive and cannot be marked.`);
+  }
+
+  const upsert = await db.query(
+    `INSERT INTO attendance (member_id, service_id, status, notes, recorded_by_user_id)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (member_id, service_id)
+     DO UPDATE SET status = $3, notes = $4, updated_by_user_id = $5, updated_at = now()
+     RETURNING id`,
+    [member.id, serviceId, status, notes, req.user.id]
+  );
+  await recomputeMemberAndSync(db, member.id, req.user.id);
+  res.status(201).json({ item: await recordById(upsert.rows[0].id) });
+}));
+
 /** Full attendance log (admin) with filters. */
 router.get('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const serviceId = vInt(req.query, 'serviceId');
@@ -299,6 +350,11 @@ router.get('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
 
   const where = [];
   const params = [];
+  // Branch admins only see records for their own branch's services.
+  if (req.user.role !== 'district_admin') {
+    params.push(req.user.branch_id || -1);
+    where.push(`s.branch_id = $${params.length}`);
+  }
   if (serviceId) { params.push(serviceId); where.push(`a.service_id = $${params.length}`); }
   if (memberId) { params.push(memberId); where.push(`a.member_id = $${params.length}`); }
   if (recordedByUserId) { params.push(recordedByUserId); where.push(`(a.recorded_by_user_id = $${params.length} OR a.updated_by_user_id = $${params.length})`); }
@@ -349,6 +405,7 @@ router.delete('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) 
   const { rows } = await db.query('SELECT member_id, service_id FROM attendance WHERE id = $1', [id]);
   if (!rows.length) throw new ApiError(404, 'Attendance record not found.');
   const svc = await serviceById(rows[0].service_id);
+  assertBranchAccess(req.user, svc.branch_id);
   if (isMarkingClosed(svc)) throw new ApiError(403, closedMessage(svc));
   await db.query('DELETE FROM attendance WHERE id = $1 RETURNING member_id', [id]);
   await recomputeMemberAndSync(db, rows[0].member_id, req.user.id);

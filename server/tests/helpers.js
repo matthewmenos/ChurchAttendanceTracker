@@ -13,11 +13,11 @@ async function resetTables() {
   );
 }
 
-async function createUser({ name = 'Test User', email, password = 'Passw0rd!', role = 'usher', status = 'active' } = {}) {
+async function createUser({ name = 'Test User', email, password = 'Passw0rd!', role = 'usher', status = 'active', branchId = null } = {}) {
   const hash = await bcrypt.hash(password, 4);
   const { rows } = await db.query(
-    'INSERT INTO users (name, email, password_hash, role, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-    [name, email, hash, role, status]
+    'INSERT INTO users (name, email, password_hash, role, status, branch_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    [name, email, hash, role, status, branchId]
   );
   return rows[0];
 }
@@ -36,15 +36,18 @@ async function loginAs(email, password = 'Passw0rd!') {
 }
 
 async function seedBase() {
-  const admin = await createUser({ name: 'Admin', email: 'admin@test.app', role: 'admin' });
-  const usher = await createUser({ name: 'Usher One', email: 'usher@test.app', role: 'usher' });
+  const { rows: branchRows } = await db.query(`INSERT INTO branches (name) VALUES ('Test Branch') RETURNING id`);
+  const branchId = branchRows[0].id;
+  const admin = await createUser({ name: 'Admin', email: 'admin@test.app', role: 'district_admin', branchId });
+  const usher = await createUser({ name: 'Usher One', email: 'usher@test.app', role: 'usher', branchId });
   const g = await db.query("INSERT INTO member_groups (name) VALUES ('Choir') RETURNING *");
   const m = await db.query(
-    `INSERT INTO members (full_name, email) VALUES
-       ('Alice Johnson', 'alice@test.app'),
-       ('Brian Smith', NULL),
-       ('Cynthia Lee', NULL)
+    `INSERT INTO members (full_name, email, branch_id) VALUES
+       ('Alice Johnson', 'alice@test.app', $1),
+       ('Brian Smith', NULL, $1),
+       ('Cynthia Lee', NULL, $1)
      RETURNING *`,
+    [branchId]
   );
   // Alice and Brian belong to the Choir (multi-group supported).
   for (const row of m.rows.slice(0, 2)) {
@@ -56,10 +59,10 @@ async function seedBase() {
   const today = new Date();
   const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const s = await db.query(
-    "INSERT INTO services (service_date, service_name, start_time) VALUES ($1, 'Sunday Service', '09:30') RETURNING *",
-    [dateStr]
+    "INSERT INTO services (service_date, service_name, start_time, branch_id) VALUES ($1, 'Sunday Service', '09:30', $2) RETURNING *",
+    [dateStr, branchId]
   );
-  return { admin, usher, group: g.rows[0], members: m.rows, service: s.rows[0] };
+  return { admin, usher, branchId, group: g.rows[0], members: m.rows, service: s.rows[0] };
 }
 
 function getCookie(res, name) {

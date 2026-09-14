@@ -4,6 +4,7 @@ import useFetch from '../../hooks/useFetch.js';
 import useDebounce from '../../hooks/useDebounce.js';
 import { api } from '../../api/client.js';
 import { useToast } from '../../context/ToastContext.jsx';
+import { useAuth } from '../../auth/AuthContext.jsx';
 import { Avatar, Badge, PageHeader } from '../../components/ui/display.jsx';
 import { Alert, EmptyState, ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
 import { Button, Field, Input, Select, Textarea } from '../../components/ui/forms.jsx';
@@ -15,7 +16,7 @@ import { IconUsers, IconTriangleAlert, IconChevronDown } from '../../components/
 
 const EMPTY_FORM = { fullName: '', email: '', phone: '', groupIds: [], birthday: '', gender: '', membershipType: '', maritalStatus: '', profession: '', residence: '', status: 'active', notes: '' };
 
-function MemberCard({ member: m, expanded, onToggle, onEdit, onToggleStatus }) {
+function MemberCard({ member: m, expanded, onToggle, onEdit, onToggleStatus, onTransfer, canTransfer }) {
   const genderLabel = m.gender === 'male' ? 'Male' : m.gender === 'female' ? 'Female' : null;
   const membershipLabel = m.membership_type === 'new_convert' ? 'New convert' : m.membership_type === 'existing' ? 'Existing' : null;
   const maritalLabel = m.marital_status ? ({ single: 'Single', married: 'Married', divorced: 'Divorced', widowed: 'Widowed' }[m.marital_status] || m.marital_status) : null;
@@ -67,6 +68,11 @@ function MemberCard({ member: m, expanded, onToggle, onEdit, onToggleStatus }) {
             >
               {m.status === 'active' ? 'Deactivate' : 'Activate'}
             </button>
+            {canTransfer && (
+              <button type='button' className='btn btn-secondary btn-sm' onClick={onTransfer}>
+                Transfer
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -85,6 +91,8 @@ function DetailRow({ label, value }) {
 
 export default function MembersPage() {
   const toast = useToast();
+  const { user, branches, currentBranchId } = useAuth();
+  const canTransfer = !!user && user.role === 'district_admin';
   const [search, setSearch] = useState('');
   const debounced = useDebounce(search);
   const [status, setStatus] = useState('all');
@@ -101,6 +109,9 @@ export default function MembersPage() {
   // Birthday is a controlled input so we can auto-fill the read-only Age field.
   const [birthday, setBirthday] = useState('');
   const [age, setAge] = useState(null);
+  // Branch transfer (district admin only).
+  const [transferTarget, setTransferTarget] = useState(null);
+  const [transferring, setTransferring] = useState(false);
 
   // Whole years between a birthday (YYYY-MM-DD) and today. null when unset.
   const calcAge = (bd) => {
@@ -159,6 +170,7 @@ export default function MembersPage() {
       residence: form.get('residence') || null,
       status: form.get('status') || undefined,
       notes: form.get('notes'),
+      branchId: !editing && canTransfer && form.get('branchId') ? Number(form.get('branchId')) : undefined,
     };
     setSaving(true);
     setFormError('');
@@ -193,6 +205,25 @@ export default function MembersPage() {
       setConfirmTarget(null);
     } finally {
       setToggling(false);
+    }
+  };
+
+  const doTransfer = async (e) => {
+    e.preventDefault();
+    if (!transferTarget) return;
+    const form = new FormData(e.target);
+    const branchId = Number(form.get('branchId'));
+    if (!branchId) return;
+    setTransferring(true);
+    try {
+      const res = await api(`/members/${transferTarget.id}/transfer`, { method: 'POST', body: { branchId } });
+      toast(`Moved to ${res.transferred_to || 'the new branch'}.`);
+      setTransferTarget(null);
+      await listQ.reload();
+    } catch (err) {
+      toast(err.message || 'Could not transfer this member.');
+    } finally {
+      setTransferring(false);
     }
   };
 
@@ -245,6 +276,8 @@ export default function MembersPage() {
               onToggle={() => setExpandedId(expandedId === m.id ? null : m.id)}
               onEdit={() => openEdit(m)}
               onToggleStatus={() => setConfirmTarget(m)}
+              canTransfer={canTransfer}
+              onTransfer={() => setTransferTarget(m)}
             />
           ))}
         </div>
@@ -333,6 +366,16 @@ export default function MembersPage() {
               <Input id='m-residence' name='residence' defaultValue={editing ? editing.residence || '' : ''} maxLength={200} />
             </Field>
           </div>
+          {!editing && canTransfer && (
+            <Field label='Branch' id='m-branch' hint='Which congregation this member belongs to.'>
+              <Select id='m-branch' name='branchId' defaultValue={currentBranchId ? String(currentBranchId) : ''}>
+                <option value=''>Choose a branch…</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <div className='field-row'>
             <Field label='Status' id='m-status'>
               <Select id='m-status' name='status' defaultValue={editing ? editing.status : 'active'}>
@@ -347,6 +390,34 @@ export default function MembersPage() {
           <div className='modal-actions'>
             <Button variant='secondary' type='button' onClick={() => setFormOpen(false)}>Cancel</Button>
             <Button type='submit' loading={saving}>{editing ? 'Save changes' : 'Add member'}</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={!!transferTarget}
+        title={transferTarget ? `Transfer — ${transferTarget.full_name}` : 'Transfer member'}
+        onClose={() => setTransferTarget(null)}
+        width='420px'
+      >
+        <form onSubmit={doTransfer} noValidate>
+          {transferTarget && transferTarget.branch_name && (
+            <p className='muted small'>Current branch: <strong>{transferTarget.branch_name}</strong></p>
+          )}
+          <p className='muted small'>Attendance history is kept. Future marking happens at the new branch.</p>
+          <Field label='Move to branch' id='m-transfer-branch' required>
+            <Select id='m-transfer-branch' name='branchId' required>
+              <option value=''>Choose a branch…</option>
+              {branches
+                .filter((b) => !transferTarget || b.id !== transferTarget.branch_id)
+                .map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+            </Select>
+          </Field>
+          <div className='modal-actions'>
+            <Button variant='secondary' type='button' onClick={() => setTransferTarget(null)}>Cancel</Button>
+            <Button type='submit' loading={transferring}>Transfer</Button>
           </div>
         </form>
       </Modal>

@@ -60,17 +60,32 @@ function requireBranchAdmin(req, res, next) {
 
 /**
  * Returns the branch_id filter for the current request.
- * District admins can override with ?branchId= query param.
- * Other users are restricted to their own branch.
+ * District admins can override with ?branchId= query param (null = all branches).
+ * Other users are hard-scoped to their own branch. -1 matches nothing, so a
+ * misconfigured account (no branch assigned) sees no data instead of everything.
  */
 function getBranchFilter(req, params = {}) {
-  if (req.user.role === 'district_admin' && req.query.branchId) {
-    return Number(req.query.branchId);
+  if (req.user.role === 'district_admin') {
+    return req.query.branchId ? Number(req.query.branchId) : null;
   }
-  if (req.user.branch_id) {
-    return req.user.branch_id;
-  }
-  return null;
+  return req.user.branch_id || -1;
 }
 
-module.exports = { authenticate, requireAdmin, requireDistrictAdmin, requireBranchAdmin, getBranchFilter, ACCESS_COOKIE, REFRESH_COOKIE };
+const ADMIN_ROLES = ['district_admin', 'branch_admin'];
+
+function isAdminRole(role) {
+  return ADMIN_ROLES.includes(role);
+}
+
+/**
+ * Throws 403 unless the user may view/act on data belonging to branchId.
+ * District admins may access any branch; everyone else only their own.
+ */
+function assertBranchAccess(user, branchId) {
+  if (!user) throw new ApiError(401, 'Authentication required. Please sign in.');
+  if (user.role === 'district_admin') return;
+  if (branchId != null && Number(user.branch_id) === Number(branchId)) return;
+  throw new ApiError(403, 'You do not have access to this branch.');
+}
+
+module.exports = { authenticate, requireAdmin, requireDistrictAdmin, requireBranchAdmin, getBranchFilter, assertBranchAccess, isAdminRole, ADMIN_ROLES, ACCESS_COOKIE, REFRESH_COOKIE };

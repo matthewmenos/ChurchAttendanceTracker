@@ -2,7 +2,7 @@ const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vDate, vTime } = require('../utils/validate');
-const { authenticate, requireAdmin, getBranchFilter } = require('../middleware/auth');
+const { authenticate, requireAdmin, getBranchFilter, assertBranchAccess } = require('../middleware/auth');
 const { getServiceTotals } = require('../services/stats');
 const { syncFollowUps } = require('../services/followups');
 
@@ -124,13 +124,20 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const notes = vStr(req.body, 'notes', { max: 500 });
   const closeTime = readCloseTime(req.body);
 
-  // Determine branch_id
+  // Determine branch_id — every service belongs to exactly one branch.
   let branchId = req.user.branch_id;
   if (req.user.role === 'district_admin' && req.body.branchId) {
     branchId = Number(req.body.branchId);
   }
   if (!branchId) {
     throw new ApiError(400, 'Cannot create service: no branch assigned.');
+  }
+  const { rows: branchRows } = await db.query(
+    `SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [branchId]);
+  if (!branchRows.length) {
+    throw new ApiError(400, 'Invalid or inactive branch.', [
+      { field: 'branchId', message: 'Unknown branch.' },
+    ]);
   }
 
   const { rows } = await db.query(
@@ -145,6 +152,7 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
 router.get('/:id', authenticate, asyncHandler(async (req, res) => {
   const service = await serviceById(Number(req.params.id));
   if (!service) throw new ApiError(404, 'Service not found.');
+  assertBranchAccess(req.user, service.branch_id);
   res.json({ service: withFlags(service) });
 }));
 
@@ -153,6 +161,7 @@ router.post('/:id/close', authenticate, requireAdmin, asyncHandler(async (req, r
   const id = Number(req.params.id);
   const service = await serviceById(id);
   if (!service) throw new ApiError(404, 'Service not found.');
+  assertBranchAccess(req.user, service.branch_id);
   await db.query(
     'UPDATE services SET attendance_closed = TRUE, attendance_closed_at = now(), attendance_closed_by = $1 WHERE id = $2',
     [req.user.id, id]
@@ -169,6 +178,7 @@ router.post('/:id/reopen', authenticate, requireAdmin, asyncHandler(async (req, 
   const id = Number(req.params.id);
   const service = await serviceById(id);
   if (!service) throw new ApiError(404, 'Service not found.');
+  assertBranchAccess(req.user, service.branch_id);
   await db.query(
     'UPDATE services SET attendance_closed = FALSE, attendance_closed_at = NULL, attendance_closed_by = NULL, attendance_close_time = NULL WHERE id = $1',
     [id]
@@ -180,6 +190,7 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
   const id = Number(req.params.id);
   const existing = await serviceById(id);
   if (!existing) throw new ApiError(404, 'Service not found.');
+  assertBranchAccess(req.user, existing.branch_id);
 
   const serviceDate = vDate(req.body, 'serviceDate', { required: true, label: 'Service date' });
   const serviceName = vStr(req.body, 'serviceName', { required: true, max: 120, label: 'Service name' });
@@ -189,12 +200,29 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
   const notes = vStr(req.body, 'notes', { max: 500 });
   const closeTime = readCloseTime(req.body);
 
+  // District admins may move a service to another branch.
+  let branchId = existing.branch_id;
+  if (req.user.role === 'district_admin' && req.body.branchId !== undefined) {
+    const next = vInt(req.body, 'branchId');
+    if (next) {
+      const { rows: branchRows } = await db.query(
+        `SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [next]);
+      if (!branchRows.length) {
+        throw new ApiError(400, 'Invalid or inactive branch.', [
+          { field: 'branchId', message: 'Unknown branch.' },
+        ]);
+      }
+      branchId = next;
+    }
+  }
+
   await db.query(
     `UPDATE services
         SET service_date = $1, service_name = $2, start_time = $3,
-            location_id = $4, total_headcount = $5, notes = $6, attendance_close_time = $7
-      WHERE id = $8`,
-    [serviceDate, serviceName, startTime, locationId, headcount, notes, closeTime, id]
+            location_id = $4, total_headcount = $5, notes = $6, attendance_close_time = $7,
+            branch_id = $8
+      WHERE id = $9`,
+    [serviceDate, serviceName, startTime, locationId, headcount, notes, closeTime, branchId, id]
   );
   res.json({ service: withFlags(await serviceById(id)) });
 }));
@@ -203,6 +231,7 @@ router.get('/:id/attendance', authenticate, requireAdmin, asyncHandler(async (re
   const id = Number(req.params.id);
   const service = await serviceById(id);
   if (!service) throw new ApiError(404, 'Service not found.');
+  assertBranchAccess(req.user, service.branch_id);
 
   const { rows } = await db.query(
     `SELECT a.id, a.status, a.notes, a.recorded_at, a.updated_at,
@@ -221,7 +250,7 @@ router.get('/:id/attendance', authenticate, requireAdmin, asyncHandler(async (re
       ORDER BY m.full_name ASC`,
     [id]
   );
-  res.json({ service: withFlags(service), totals: await getServiceTotals(db, id), items: rows });
+  res.json({ service: withFlags(service), totals: await getServiceTotals(db, id, service.branch_id), items: rows });
 }));
 
 module.exports = router;

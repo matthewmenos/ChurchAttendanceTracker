@@ -53,15 +53,15 @@ async function main() {
   const adminId = adminRows[0].id;
 
   const { rows: u1Rows } = await db.query(
-    `INSERT INTO users (name, email, password_hash, role, created_by)
-     VALUES ($1, $2, $3, 'usher', $4) RETURNING id`,
+    `INSERT INTO users (name, email, password_hash, role, created_by, branch_id)
+     VALUES ($1, $2, $3, 'usher', $4, (SELECT id FROM branches WHERE name = 'Main Branch')) RETURNING id`,
     [env.seed.usherName, env.seed.usherEmail.toLowerCase(), usherHash, adminId]
   );
   const usher1 = u1Rows[0].id;
 
   const { rows: u2Rows } = await db.query(
-    `INSERT INTO users (name, email, password_hash, role, created_by)
-     VALUES ($1, $2, $3, 'usher', $4) RETURNING id`,
+    `INSERT INTO users (name, email, password_hash, role, created_by, branch_id)
+     VALUES ($1, $2, $3, 'usher', $4, (SELECT id FROM branches WHERE name = 'Main Branch')) RETURNING id`,
     ['Daniel Okafor', process.env.SEED_USHER2_EMAIL || `daniel@${env.seed.usherEmail.split('@')[1]}`, usherHash, adminId]
   );
   const usher2 = u2Rows[0].id;
@@ -233,6 +233,16 @@ async function main() {
     }
     const headcount = presentCount + 3 + Math.floor(rnd() * 20);
     await db.query('UPDATE services SET total_headcount = $1 WHERE id = $2', [headcount, serviceIds[s]]);
+  }
+
+  // ---------- member door codes ----------
+  // Demo members need codes too (retry loop guards against collisions).
+  for (let i = 0; i < 5; i += 1) {
+    const filled = await db.query(
+      `UPDATE members SET member_code = upper(substr(md5('seed-' || id::text || random()::text), 1, 6))
+         WHERE member_code IS NULL`
+    );
+    if (!filled.rowCount) break;
   }
 
   // ---------- recompute streaks / last attended ----------

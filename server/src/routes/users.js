@@ -111,9 +111,14 @@ router.post('/', asyncHandler(async (req, res) => {
     if (!branchCheck.rows.length) throw new ApiError(400, 'Invalid or inactive branch.');
   }
 
-  // Branch admin can only create users in their own branch
-  if (req.user.role === 'branch_admin' && branchId !== req.user.branch_id) {
-    throw new ApiError(403, 'You can only create users in your own branch.');
+  // Branch admins manage ushers within their own branch only.
+  if (req.user.role === 'branch_admin') {
+    if (role !== 'usher') {
+      throw new ApiError(403, 'Branch admins can only create usher accounts.');
+    }
+    if (branchId !== req.user.branch_id) {
+      throw new ApiError(403, 'You can only create users in your own branch.');
+    }
   }
 
   const dup = await db.query('SELECT id FROM users WHERE lower(email) = $1', [email]);
@@ -137,6 +142,16 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const existing = await findUser(id);
   if (!existing) throw new ApiError(404, 'User not found.');
+
+  // Branch admins manage ushers in their own branch only.
+  if (req.user.role === 'branch_admin') {
+    if (existing.role !== 'usher') {
+      throw new ApiError(403, 'Branch admins can only manage usher accounts.');
+    }
+    if (existing.branch_id !== req.user.branch_id) {
+      throw new ApiError(403, 'You can only manage users in your own branch.');
+    }
+  }
 
   const name = vStr(req.body, 'name', { required: true, max: 120, label: 'Full name' });
   const email = vEmail(req.body, 'email', { required: true });
@@ -173,6 +188,9 @@ router.patch('/:id/status', asyncHandler(async (req, res) => {
   const status = vEnum(req.body, 'status', ['active', 'inactive'], { required: true });
   const existing = await findUser(id);
   if (!existing) throw new ApiError(404, 'User not found.');
+  if (req.user.role === 'branch_admin' && (existing.role !== 'usher' || existing.branch_id !== req.user.branch_id)) {
+    throw new ApiError(403, 'You can only manage ushers in your own branch.');
+  }
   if (id === req.user.id && status === 'inactive') {
     throw new ApiError(400, 'You cannot deactivate your own account.');
   }
@@ -199,6 +217,9 @@ router.post('/:id/reset-password', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const existing = await findUser(id);
   if (!existing) throw new ApiError(404, 'User not found.');
+  if (req.user.role === 'branch_admin' && (existing.role !== 'usher' || existing.branch_id !== req.user.branch_id)) {
+    throw new ApiError(403, 'You can only manage ushers in your own branch.');
+  }
 
   const temporaryPassword = generateTempPassword();
   const hash = await hashPassword(temporaryPassword);
@@ -217,6 +238,9 @@ router.get('/:id/attendance-records', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const existing = await findUser(id);
   if (!existing) throw new ApiError(404, 'User not found.');
+  if (req.user.role === 'branch_admin' && (existing.role !== 'usher' || existing.branch_id !== req.user.branch_id)) {
+    throw new ApiError(403, 'You can only manage ushers in your own branch.');
+  }
 
   const { rows: totalsRows } = await db.query(
     `SELECT COUNT(*) AS total,

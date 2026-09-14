@@ -10,8 +10,47 @@ import { TrendChart } from '../../components/charts/Charts.jsx';
 import { IconCircleCheck } from '../../components/ui/icons.jsx';
 import { formatDate, formatShortDate, timeAgo } from '../../utils/format.js';
 
+function BranchComparison() {
+  const { data, loading, error, reload } = useFetch(() => api('/reports/branches'), []);
+  if (loading) return <section className='card pad'><LoadingBlock label='Comparing branches…' /></section>;
+  if (error) return <section className='card pad'><ErrorState error={error} onRetry={reload} /></section>;
+
+  const rows = (data && data.branches) || [];
+  return (
+    <section className='card' aria-label='Branch comparison'>
+      <div className='card-head-row'>
+        <h2 className='card-title'>Attendance by branch</h2>
+        <span className='muted small'>Last 90 days</span>
+      </div>
+      {rows.length === 0 ? (
+        <p className='muted pad-inline'>No active branches yet.</p>
+      ) : (
+        <Table
+          caption='Attendance comparison across branches'
+          rows={rows}
+          getRowKey={(r) => r.id}
+          columns={[
+            { key: 'name', label: 'Branch' },
+            { key: 'active_members', label: 'Members', className: 'num' },
+            { key: 'services', label: 'Services', className: 'num' },
+            { key: 'present', label: 'Present', className: 'num' },
+            {
+              key: 'avg_present_per_service',
+              label: 'Avg / service',
+              className: 'num',
+              render: (r) => (r.avg_present_per_service == null ? '—' : String(r.avg_present_per_service)),
+            },
+            { key: 'open_follow_ups', label: 'Follow-ups', className: 'num' },
+          ]}
+        />
+      )}
+    </section>
+  );
+}
+
 export default function OverviewPage() {
-  const { currentBranchId } = useAuth();
+  const { user, currentBranchId } = useAuth();
+  const isDistrictAdmin = !!user && user.role === 'district_admin';
   const { data, loading, error, reload } = useFetch(
     () => api("/reports/dashboard", { params: currentBranchId ? { branchId: currentBranchId } : {} }),
     [currentBranchId]
@@ -57,6 +96,8 @@ export default function OverviewPage() {
         <h2 className='card-title'>Recent attendance trend</h2>
         <TrendChart points={(d.trend || []).map((t) => ({ label: formatShortDate(t.service_date), value: t.present }))} />
       </section>
+
+      {isDistrictAdmin && <BranchComparison />}
 
       <div className='grid-2'>
         <section className='card' aria-label='Recent services'>

@@ -43,10 +43,16 @@ async function recomputeMemberStats(db, memberId) {
   return streak;
 }
 
-async function getServiceTotals(db, serviceId) {
-  // "Unmarked means absent": the pool is every active member; members with no
-  // attendance record for this service are counted as absent (with their gender,
-  // when known) rather than in a separate bucket.
+async function getServiceTotals(db, serviceId, branchId) {
+  // "Unmarked means absent": the pool is every active member of the service's
+  // branch; members with no attendance record for this service are counted as
+  // absent (with their gender, when known) rather than in a separate bucket.
+  const params = [serviceId];
+  let whereSql = `WHERE m.status = 'active'`;
+  if (branchId != null) {
+    params.push(branchId);
+    whereSql += ` AND m.branch_id = $${params.length}`;
+  }
   const { rows } = await db.query(
     `SELECT COUNT(*) AS eligible,
             COUNT(a.id) AS marked,
@@ -64,8 +70,8 @@ async function getServiceTotals(db, serviceId) {
             COUNT(*) FILTER (WHERE a.status = 'excused' AND m.gender = 'female') AS excused_female
        FROM members m
        LEFT JOIN attendance a ON a.member_id = m.id AND a.service_id = $1
-      WHERE m.status = 'active'`,
-    [serviceId]
+      ${whereSql}`,
+    params
   );
   const r = rows[0];
   const num = (v) => Number(v);

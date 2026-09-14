@@ -23,6 +23,10 @@ export default function UsherMarkPage() {
   const [saveError, setSaveError] = useState(null);
   const [noteTarget, setNoteTarget] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
+  // Door-code quick marking (PIN flow).
+  const [code, setCode] = useState('');
+  const [codeBusy, setCodeBusy] = useState(false);
+  const [codeMsg, setCodeMsg] = useState(null);
 
   const groups = useFetch(() => api('/groups'), []);
   const roster = useRoster(serviceId, { search: debounced, groupId, pageSize });
@@ -65,6 +69,27 @@ export default function UsherMarkPage() {
       [noteTarget.member_id]: { ...effective(noteTarget), notes: noteDraft.trim() },
     }));
     setNoteTarget(null);
+  };
+
+  const markByCode = async (e) => {
+    e.preventDefault();
+    const c = code.trim();
+    if (!c || codeBusy) return;
+    setCodeBusy(true);
+    setCodeMsg(null);
+    try {
+      const res = await api('/attendance/code', {
+        method: 'POST',
+        body: { serviceId: Number(serviceId), code: c, status: 'present' },
+      });
+      setCodeMsg({ tone: 'ok', text: `${res.item.member_name} marked present.` });
+      setCode('');
+      await roster.reload();
+    } catch (err) {
+      setCodeMsg({ tone: 'err', text: err.message || 'Could not mark that code.' });
+    } finally {
+      setCodeBusy(false);
+    }
   };
 
   const saveAll = async () => {
@@ -131,6 +156,24 @@ export default function UsherMarkPage() {
         </select>
       </div>
 
+      {!closed && (
+        <form className='card pad' style={{ marginBottom: 12 }} onSubmit={markByCode}>
+          <Field label='Quick add by door code' id='usher-code' hint='Type the member code and press Enter to mark them present.'>
+            <input
+              id='usher-code'
+              className='input'
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder='e.g. K7Q2M1'
+              autoComplete='off'
+              autoCapitalize='characters'
+              maxLength={20}
+              disabled={codeBusy}
+            />
+          </Field>
+          {codeMsg && <Alert variant={codeMsg.tone === 'ok' ? 'info' : 'error'}>{codeMsg.text}</Alert>}
+        </form>
+      )}
       {roster.loading && <LoadingBlock label='Loading member list…' />}
       {roster.error && <ErrorState error={roster.error} onRetry={roster.reload} />}
 

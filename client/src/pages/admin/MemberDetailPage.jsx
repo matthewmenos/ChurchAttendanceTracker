@@ -23,6 +23,7 @@ export default function MemberDetailPage() {
   const [fuOpen, setFuOpen] = useState(false);
   const [savingFu, setSavingFu] = useState(false);
   const [fuError, setFuError] = useState('');
+  const [codeBusy, setCodeBusy] = useState(false);
 
   useEffect(() => {
     document.title = 'Member — Church Attendance Tracker';
@@ -63,6 +64,19 @@ export default function MemberDetailPage() {
     }
   };
 
+  const regenerateCode = async () => {
+    setCodeBusy(true);
+    try {
+      await api(`/members/${id}/regenerate-code`, { method: 'POST' });
+      toast('A new door code was generated. The old one no longer works.');
+      await detail.reload();
+    } catch (err) {
+      toast(err.message || 'Could not generate a new code.');
+    } finally {
+      setCodeBusy(false);
+    }
+  };
+
   return (
     <div className='container wide'>
       <button type='button' className='link-btn back-link' onClick={() => navigate('/admin/members')}><IconChevronLeft size={14} /> Back to members</button>
@@ -90,6 +104,24 @@ export default function MemberDetailPage() {
           {member.notes && <p className='member-notes'>{member.notes}</p>}
         </div>
         <div className='member-hero-actions'>
+          {member.member_code && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end', marginRight: 8 }}>
+              <span className='muted small'>Door code</span>
+              <code style={{ fontSize: '1.05rem', fontWeight: 700, letterSpacing: 2 }}>{member.member_code}</code>
+              <span style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type='button'
+                  className='btn btn-ghost btn-sm'
+                  onClick={() => navigator.clipboard.writeText(member.member_code).then(() => toast('Code copied.'))}
+                >
+                  Copy
+                </button>
+                <button type='button' className='btn btn-ghost btn-sm' disabled={codeBusy} onClick={regenerateCode}>
+                  New code
+                </button>
+              </span>
+            </div>
+          )}
           <Button variant='secondary' onClick={() => navigate('/admin/members')}>Edit in list</Button>
           <Button onClick={() => setFuOpen(true)}>+ Follow-up plan</Button>
         </div>

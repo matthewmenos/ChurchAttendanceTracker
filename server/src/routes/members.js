@@ -2,7 +2,8 @@ const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vEmail, vInt, vEnum, vDate } = require('../utils/validate');
-const { authenticate, requireAdmin, getBranchFilter } = require('../middleware/auth');
+const { authenticate, requireAdmin, getBranchFilter, assertBranchAccess, requireDistrictAdmin } = require('../middleware/auth');
+const { generateMemberCode } = require('../utils/codes');
 
 const router = express.Router();
 // All member management is admin-only, enforced on the server.
@@ -30,6 +31,9 @@ function cleanMember(m) {
     full_name: m.full_name,
     email: m.email,
     phone: m.phone,
+    branch_id: m.branch_id ?? null,
+    branch_name: m.branch_name || null,
+    member_code: m.member_code || null,
     birthday: m.birthday || null,
     age: m.age || null,
     gender: m.gender || null,
@@ -50,13 +54,14 @@ function cleanMember(m) {
 
 async function findMember(id) {
   const { rows } = await db.query(
-    `SELECT m.*, COALESCE((
+    `SELECT m.*, b.name AS branch_name, COALESCE((
          SELECT json_agg(json_build_object('id', g.id, 'name', g.name) ORDER BY g.name)
            FROM member_group_assignments mga
            JOIN member_groups g ON g.id = mga.group_id
           WHERE mga.member_id = m.id
        ), '[]'::json) AS groups
        FROM members m
+       LEFT JOIN branches b ON b.id = m.branch_id
       WHERE m.id = $1`,
     [id]
   );
@@ -173,11 +178,13 @@ router.post('/', asyncHandler(async (req, res) => {
   }
 
   try {
+    // Every member gets a short door code for quick attendance marking.
+    const memberCode = await generateMemberCode(db);
     const { rows } = await db.query(
-      `INSERT INTO members (full_name, email, phone, birthday, age, gender, membership_type, marital_status, profession, residence, status, notes, branch_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      `INSERT INTO members (full_name, email, phone, birthday, age, gender, membership_type, marital_status, profession, residence, status, notes, branch_id, member_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING id`,
-      [fullName, email, phone, birthday, age, gender, membershipType, maritalStatus, profession, residence, status, notes, branchId]
+      [fullName, email, phone, birthday, age, gender, membershipType, maritalStatus, profession, residence, status, notes, branchId, memberCode]
     );
     await setMemberGroups(rows[0].id, groupIds);
     res.status(201).json({ member: cleanMember(await findMember(rows[0].id)) });
@@ -247,6 +254,7 @@ router.patch('/:id/status', asyncHandler(async (req, res) => {
   const status = vEnum(req.body, 'status', ['active', 'inactive'], { required: true });
   const existing = await findMember(id);
   if (!existing) throw new ApiError(404, 'Member not found.');
+  assertBranchAccess(req.user, existing.branch_id);
   await db.query('UPDATE members SET status = $1 WHERE id = $2', [status, id]);
   res.json({ member: cleanMember(await findMember(id)) });
 }));
@@ -255,6 +263,7 @@ router.get('/:id/attendance', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const member = await findMember(id);
   if (!member) throw new ApiError(404, 'Member not found.');
+  assertBranchAccess(req.user, member.branch_id);
 
   const { rows: items } = await db.query(
     `SELECT a.id, a.status, a.notes, a.recorded_at, a.updated_at,
@@ -281,6 +290,43 @@ router.get('/:id/attendance', asyncHandler(async (req, res) => {
     summary: { present: Number(t[0].p), absent: Number(t[0].ab), excused: Number(t[0].ex) },
     items,
   });
+}));
+
+/** Issue a new door code for this member; the old one stops working. */
+router.post('/:id/regenerate-code', asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const member = await findMember(id);
+  if (!member) throw new ApiError(404, 'Member not found.');
+  assertBranchAccess(req.user, member.branch_id);
+
+  const code = await generateMemberCode(db);
+  await db.query('UPDATE members SET member_code = $1 WHERE id = $2', [code, id]);
+  res.json({ member: cleanMember(await findMember(id)) });
+}));
+
+/**
+ * Move a member to another branch (district admin only).
+ * Attendance history is kept; future marking happens at the new branch.
+ */
+router.post('/:id/transfer', requireDistrictAdmin, asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const member = await findMember(id);
+  if (!member) throw new ApiError(404, 'Member not found.');
+
+  const branchId = vInt(req.body, 'branchId', { required: true, label: 'Branch' });
+  const { rows: branchRows } = await db.query(
+    `SELECT id, name FROM branches WHERE id = $1 AND status = 'active'`, [branchId]);
+  if (!branchRows.length) {
+    throw new ApiError(400, 'Invalid or inactive branch.', [
+      { field: 'branchId', message: 'Unknown branch.' },
+    ]);
+  }
+  if (member.branch_id === branchId) {
+    throw new ApiError(400, 'The member already belongs to this branch.');
+  }
+
+  await db.query('UPDATE members SET branch_id = $1 WHERE id = $2', [branchId, id]);
+  res.json({ member: cleanMember(await findMember(id)), transferred_to: branchRows[0].name });
 }));
 
 module.exports = router;

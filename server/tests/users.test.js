@@ -14,10 +14,10 @@ async function setup() {
 
 describe('User management (admin only)', () => {
   test('admin creates an usher account with a one-time temporary password', async () => {
-    const { admin } = await setup();
+    const { admin, base } = await setup();
     const res = await admin
       .post('/api/users')
-      .send({ name: 'New Usher', email: 'new.usher@test.app', role: 'usher' });
+      .send({ name: 'New Usher', email: 'new.usher@test.app', role: 'usher', branchId: base.branchId });
     expect(res.status).toBe(201);
     expect(res.body.user.role).toBe('usher');
     expect(res.body.user.must_change_password).toBe(true);
@@ -31,15 +31,15 @@ describe('User management (admin only)', () => {
   });
 
   test('duplicate emails are rejected', async () => {
-    const { admin } = await setup();
+    const { admin, base } = await setup();
     const res = await admin
       .post('/api/users')
-      .send({ name: 'Clone', email: 'usher@test.app', role: 'usher' });
+      .send({ name: 'Clone', email: 'usher@test.app', role: 'usher', branchId: base.branchId });
     expect(res.status).toBe(409);
   });
 
   test('user list never exposes password hashes', async () => {
-    const { admin } = await setup();
+    const { admin, base } = await setup();
     const res = await admin.get('/api/users');
     expect(res.status).toBe(200);
     for (const user of res.body.items) {
@@ -48,7 +48,7 @@ describe('User management (admin only)', () => {
   });
 
   test('reset-password invalidates the old password and issues a new one', async () => {
-    const { admin } = await setup();
+    const { admin, base } = await setup();
     const target = await db.query("SELECT id FROM users WHERE email = 'usher@test.app'");
     const id = target.rows[0].id;
 
@@ -69,7 +69,7 @@ describe('User management (admin only)', () => {
   });
 
   test('deactivated ushers cannot sign in; reactivation restores access', async () => {
-    const { admin } = await setup();
+    const { admin, base } = await setup();
     const target = await db.query("SELECT id FROM users WHERE email = 'usher@test.app'");
     const id = target.rows[0].id;
 

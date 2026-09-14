@@ -2,6 +2,7 @@ const db = require('../config/db');
 const { ApiError } = require('../utils/errors');
 const { getSettingsMap } = require('./settings');
 const { isArkaselConfigured, sendViaArkasel, renderTemplate } = require('./sms');
+const { generateMemberCode } = require('../utils/codes');
 
 async function findVisitor(id) {
   const { rows } = await db.query(
@@ -73,11 +74,16 @@ async function recordVisit(visitorId, serviceId, recordedBy) {
   );
 }
 
-async function listVisitors({ serviceId, createdBy, followupStatus, search, page = 1, pageSize = 20 }) {
+async function listVisitors({ serviceId, createdBy, branchId, followupStatus, search, page = 1, pageSize = 20 }) {
   const where = [];
   const params = [];
   if (serviceId) { params.push(serviceId); where.push(`v.service_id = $${params.length}`); }
   if (createdBy) { params.push(createdBy); where.push(`v.created_by = $${params.length}`); }
+  // Branch scoping via the visitor's service (works in both data & count queries).
+  if (branchId) {
+    params.push(branchId);
+    where.push(`v.service_id IN (SELECT id FROM services WHERE branch_id = $${params.length})`);
+  }
   if (followupStatus) { params.push(followupStatus); where.push(`v.followup_status = $${params.length}`); }
   if (search) {
     params.push(`%${search}%`);
@@ -132,11 +138,23 @@ async function convertToMember(visitorId) {
   const v = await findVisitor(visitorId);
   if (!v) throw new ApiError(404, 'Visitor not found.');
   if (v.converted_member_id) return { visitor: v, member_id: v.converted_member_id, alreadyConverted: true };
+  // New member joins the branch of the service they visited (or the
+  // capturing user's branch when the visit had no service).
+  const { rows: bRows } = await db.query(
+    `SELECT COALESCE(s.branch_id, u.branch_id) AS branch_id
+       FROM visitors v
+       LEFT JOIN services s ON s.id = v.service_id
+       LEFT JOIN users u ON u.id = v.created_by
+      WHERE v.id = $1`,
+    [visitorId]
+  );
+  const branchId = (bRows[0] && bRows[0].branch_id) || null;
+  const memberCode = await generateMemberCode(db);
   const { rows } = await db.query(
-    `INSERT INTO members (full_name, phone, email, gender, status, notes)
-     VALUES ($1, $2, $3, $4, 'active', $5)
+    `INSERT INTO members (full_name, phone, email, gender, status, notes, branch_id, member_code)
+     VALUES ($1, $2, $3, $4, 'active', $5, $6, $7)
      RETURNING id`,
-    [v.full_name, v.phone || null, v.email || null, v.gender || null, v.notes || null]
+    [v.full_name, v.phone || null, v.email || null, v.gender || null, v.notes || null, branchId, memberCode]
   );
   const memberId = rows[0].id;
   await db.query(

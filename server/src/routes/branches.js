@@ -26,15 +26,22 @@ function cleanBranch(b) {
 }
 
 // GET /api/branches - list branches
-// District admin sees all, branch admin sees only their own
+// District admin sees all; branch admins & ushers only their own branch.
 router.get('/', asyncHandler(async (req, res) => {
+  const params = [];
+  let whereSql = `WHERE b.status = 'active'`;
+  if (req.user.role !== 'district_admin') {
+    params.push(req.user.branch_id || -1);
+    whereSql += ` AND b.id = $1`;
+  }
   const { rows } = await db.query(
     `SELECT b.*,
             (SELECT COUNT(*) FROM members m WHERE m.branch_id = b.id AND m.status = 'active') AS member_count,
             (SELECT COUNT(*) FROM users u WHERE u.branch_id = b.id AND u.status = 'active') AS user_count
        FROM branches b
-      WHERE b.status = 'active'
-      ORDER BY b.name ASC`
+      ${whereSql}
+      ORDER BY b.name ASC`,
+    params
   );
   res.json({ items: rows.map(cleanBranch), total: rows.length });
 }));
@@ -51,6 +58,9 @@ router.get('/:id', asyncHandler(async (req, res) => {
     [id]
   );
   if (!rows[0]) throw new ApiError(404, 'Branch not found.');
+  if (req.user.role !== 'district_admin' && req.user.branch_id !== rows[0].id) {
+    throw new ApiError(403, 'You do not have access to this branch.');
+  }
   res.json({ branch: cleanBranch(rows[0]) });
 }));
 

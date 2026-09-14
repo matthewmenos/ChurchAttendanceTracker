@@ -320,6 +320,15 @@ UPDATE users SET role = 'district_admin' WHERE role IN ('admin', 'district_admin
 ALTER TABLE users ADD CONSTRAINT users_role_check
   CHECK (role IN ('district_admin', 'branch_admin', 'usher'));
 
+-- ======================= MEMBER DOOR CODES =======================
+-- Short codes ushers can type at the door to mark a member present.
+ALTER TABLE members ADD COLUMN IF NOT EXISTS member_code TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS members_member_code_idx ON members(member_code) WHERE member_code IS NOT NULL;
+-- Backfill codes for members created before this change. Deterministic +
+-- unique by construction (id suffix), so re-running never collides.
+UPDATE members SET member_code = upper(substr(md5('cat-member-' || id::text), 1, 6)) || '-' || id::text
+WHERE member_code IS NULL;
+
 -- Re-point orphaned rows at the default branch.
 UPDATE users         SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;
 UPDATE members       SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;

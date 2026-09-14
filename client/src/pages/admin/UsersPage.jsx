@@ -13,7 +13,8 @@ import { IconFileText } from '../../components/ui/icons.jsx';
 
 export default function UsersPage() {
   const toast = useToast();
-  const { user: me } = useAuth();
+  const { user: me, branches } = useAuth();
+  const isDistrict = !!me && me.role === 'district_admin';
   const listQ = useFetch(() => api('/users'), []);
   const items = (listQ.data && listQ.data.items) || [];
 
@@ -57,6 +58,7 @@ export default function UsersPage() {
       username: form.get('username'),
       phone: form.get('phone'),
       role: editing ? undefined : form.get('role'),
+      branchId: !editing && isDistrict && form.get('branchId') ? Number(form.get('branchId')) : undefined,
     };
     setSaving(true);
     setFormError('');
@@ -66,7 +68,7 @@ export default function UsersPage() {
         toast('Account updated.');
       } else {
         const res = await api('/users', { method: 'POST', body: payload });
-        toast(`Usher account created for ${res.user.name}.`);
+        toast(`Account created for ${res.user.name}.`);
         setTempPassword({ name: res.user.name, password: res.temporaryPassword });
       }
       setFormOpen(false);
@@ -172,7 +174,7 @@ export default function UsersPage() {
         </div>
       )}
 
-      <Modal open={formOpen} title={editing ? `Edit — ${editing.name}` : 'New usher account'} onClose={() => setFormOpen(false)} width='480px'>
+      <Modal open={formOpen} title={editing ? `Edit — ${editing.name}` : 'New user account'} onClose={() => setFormOpen(false)} width='480px'>
         <form onSubmit={saveUser} noValidate>
           {formError && <Alert variant='error'>{formError}</Alert>}
           <Field label='Full name' id='u-name' required>
@@ -188,12 +190,25 @@ export default function UsersPage() {
             <Input id='u-phone' name='phone' defaultValue={editing ? editing.phone : ''} maxLength={40} />
           </Field>
           {!editing && (
-            <Field label='Role' id='u-role' required>
-              <Select id='u-role' name='role' defaultValue='usher'>
-                <option value='usher'>Usher — records attendance only</option>
-                <option value='admin'>Admin — full access</option>
-              </Select>
-            </Field>
+            <>
+              <Field label='Role' id='u-role' required>
+                <Select id='u-role' name='role' defaultValue='usher'>
+                  {isDistrict && <option value='district_admin'>District admin — full access</option>}
+                  {isDistrict && <option value='branch_admin'>Branch admin — manages one branch</option>}
+                  <option value='usher'>Usher — records attendance only</option>
+                </Select>
+              </Field>
+              {isDistrict && (
+                <Field label='Branch' id='u-branch' hint='Required for ushers and branch admins; district admins are not branch-bound.'>
+                  <Select id='u-branch' name='branchId' defaultValue=''>
+                    <option value=''>No branch (district admin only)</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </Select>
+                </Field>
+              )}
+            </>
           )}
           <div className='modal-actions'>
             <Button variant='secondary' type='button' onClick={() => setFormOpen(false)}>Cancel</Button>

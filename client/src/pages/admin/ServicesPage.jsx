@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import useFetch from '../../hooks/useFetch.js';
 import { api } from '../../api/client.js';
 import { useToast } from '../../context/ToastContext.jsx';
+import { useAuth } from '../../auth/AuthContext.jsx';
 import { Badge, PageHeader, Tabs } from '../../components/ui/display.jsx';
 import { Alert, EmptyState, ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
 import { Button, Field, Input, Select, Textarea } from '../../components/ui/forms.jsx';
@@ -27,6 +28,8 @@ function toLocalDT(ts) {
 
 export default function ServicesPage() {
   const toast = useToast();
+  const { user, branches, currentBranchId } = useAuth();
+  const isDistrict = !!user && user.role === 'district_admin';
   const [tab, setTab] = useState('upcoming');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -65,6 +68,7 @@ export default function ServicesPage() {
       totalHeadcount: form.get('totalHeadcount') === '' ? 0 : Number(form.get('totalHeadcount')),
       attendanceCloseTime: form.get('attendanceCloseTime') || null,
       notes: form.get('notes'),
+      branchId: isDistrict && form.get('branchId') ? Number(form.get('branchId')) : undefined,
     };
     setSaving(true);
     setFormError('');
@@ -169,6 +173,26 @@ export default function ServicesPage() {
           <Field label='Service name' id='sv-name' required>
             <Input id='sv-name' name='serviceName' defaultValue={editing ? editing.service_name : ''} placeholder='e.g. Sunday Worship Service' required maxLength={120} />
           </Field>
+          {isDistrict && (
+            <Field
+              label='Branch'
+              id='sv-branch'
+              required={!editing}
+              hint={editing ? 'You can move this service to another branch.' : 'Every service belongs to a branch.'}
+            >
+              <Select
+                id='sv-branch'
+                name='branchId'
+                required={!editing}
+                defaultValue={editing && editing.branch_id ? String(editing.branch_id) : (currentBranchId ? String(currentBranchId) : '')}
+              >
+                <option value=''>Choose a branch…</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field label='Location' id='sv-location'>
             <Select id='sv-location' name='locationId' defaultValue={editing && editing.location_id ? String(editing.location_id) : ''}>
               <option value=''>No location</option>
