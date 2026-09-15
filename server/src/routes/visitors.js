@@ -47,8 +47,11 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   const result = await listVisitors({
     serviceId: serviceId || undefined,
     createdBy: mine ? req.user.id : undefined,
+    // District admins see the whole church and may narrow with ?branchId=.
     // Branch admins & ushers only ever see visitors of their own branch.
-    branchId: isDistrictAdmin ? undefined : (req.user.branch_id || -1),
+    branchId: isDistrictAdmin
+      ? (vInt(req.query, 'branchId') || undefined)
+      : (req.user.branch_id || -1),
     followupStatus: vEnum(req.query, 'followupStatus', ['new', 'contacted', 'visited', 'joined', 'lost']),
     search: vStr(req.query, 'search', { max: 100 }) || undefined,
     page: vInt(req.query, 'page') || 1,

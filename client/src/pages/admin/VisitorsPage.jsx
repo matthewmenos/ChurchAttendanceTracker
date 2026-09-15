@@ -11,6 +11,7 @@ import { Pagination, Table } from '../../components/ui/Table.jsx';
 import { formatShortDate, formatDate } from '../../utils/format.js';
 import { downloadCsv } from '../../utils/csv.js';
 import { IconUsers } from '../../components/ui/icons.jsx';
+import { useAuth } from '../../auth/AuthContext.jsx';
 
 const STATUSES = [['new', 'New'], ['contacted', 'Contacted'], ['visited', 'Visited'], ['joined', 'Joined'], ['lost', 'Lost']];
 const STATUS_VARIANT = { new: 'info', contacted: 'neutral', visited: 'info', joined: 'ok', lost: 'high' };
@@ -18,9 +19,12 @@ const statusLabel = (k) => (STATUSES.find(([x]) => x === k) || [k, k])[1];
 
 export default function VisitorsPage() {
   const toast = useToast();
+  const { user, branches } = useAuth();
+  const isDistrict = !!user && user.role === 'district_admin';
   const [search, setSearch] = useState('');
   const debounced = useDebounce(search);
   const [status, setStatus] = useState('');
+  const [branchId, setBranchId] = useState('');
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -30,8 +34,8 @@ export default function VisitorsPage() {
   const [converting, setConverting] = useState(false);
 
   const listQ = useFetch(
-    () => api('/visitors', { params: { search: debounced || undefined, followupStatus: status || undefined, page, pageSize: 20 } }),
-    [debounced, status, page]
+    () => api('/visitors', { params: { search: debounced || undefined, followupStatus: status || undefined, branchId: isDistrict && branchId ? Number(branchId) : undefined, page, pageSize: 20 } }),
+    [debounced, status, branchId, page]
   );
   const statsQ = useFetch(() => api('/visitors/stats'), []);
   const items = (listQ.data && listQ.data.items) || [];
@@ -137,6 +141,12 @@ export default function VisitorsPage() {
           <option value=''>All statuses</option>
           {STATUSES.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
         </Select>
+        {isDistrict && (
+          <Select value={branchId} onChange={(e) => { setBranchId(e.target.value); setPage(1); }} aria-label='Filter by branch' className='select-fit'>
+            <option value=''>All branches</option>
+            {(branches || []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </Select>
+        )}
       </div>
 
       {listQ.loading && <LoadingBlock />}

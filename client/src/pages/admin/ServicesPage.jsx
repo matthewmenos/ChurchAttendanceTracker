@@ -69,6 +69,7 @@ export default function ServicesPage() {
       attendanceCloseTime: form.get('attendanceCloseTime') || null,
       notes: form.get('notes'),
       branchId: isDistrict && form.get('branchId') ? Number(form.get('branchId')) : undefined,
+      allBranches: isDistrict && form.get('allBranches') ? true : undefined,
     };
     setSaving(true);
     setFormError('');
@@ -122,7 +123,7 @@ export default function ServicesPage() {
             getRowKey={(r) => r.id}
             columns={[
               { key: 'service_date', label: 'Date', render: (r) => (<span><strong>{formatShortDate(r.service_date)}</strong><span className='muted small block'>{formatDate(r.service_date).split(', ').pop()}</span></span>) },
-              { key: 'service_name', label: 'Service', render: (r) => <Link to={`/admin/services/${r.id}`} className='row-title'>{r.service_name}</Link> },
+              { key: 'service_name', label: 'Service', render: (r) => (<span><Link to={`/admin/services/${r.id}`} className='row-title'>{r.service_name}</Link>{r.all_branches ? <span> <Badge variant='info'>All branches</Badge></span> : null}</span>) },
               { key: 'start_time', label: 'Time', render: (r) => (r.start_time ? formatTime(r.start_time) : '—') },
               { key: 'location_name', label: 'Location', render: (r) => r.location_name || '—' },
               { key: 'total_headcount', label: 'Headcount', className: 'num' },
@@ -191,6 +192,18 @@ export default function ServicesPage() {
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </Select>
+            </Field>
+          )}
+          {isDistrict && (
+            <Field
+              label='Joint service'
+              id='sv-all-branches'
+              hint='Tick when all branches gather (e.g. combined service). Ushers of every branch can then record attendance, and the roster includes every branch’s members.'
+            >
+              <label className='checkbox' style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input id='sv-all-branches' name='allBranches' type='checkbox' defaultChecked={!!(editing && editing.all_branches)} />
+                <span>All branches gather for this service</span>
+              </label>
             </Field>
           )}
           <Field label='Location' id='sv-location'>

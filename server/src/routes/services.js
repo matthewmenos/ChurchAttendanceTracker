@@ -11,6 +11,7 @@ const router = express.Router();
 const LIST_SELECT = `
   SELECT s.id, s.service_date, s.service_name, s.start_time, s.total_headcount, s.notes,
          s.location_id, l.name AS location_name, s.branch_id, b.name AS branch_name, s.created_at, s.updated_at,
+         s.all_branches,
          s.attendance_closed, s.attendance_closed_at, cb.name AS attendance_closed_by_name,
          s.attendance_close_time,
          COALESCE(a.present, 0)::int AS present,
@@ -54,9 +55,29 @@ function withFlags(row) {
     && new Date(row.attendance_close_time).getTime() <= Date.now();
   return {
     ...row,
+    all_branches: !!row.all_branches,
     upcoming: String(row.service_date) >= todayStr,
     marking_closed: !!row.attendance_closed || schedulePassed,
   };
+}
+
+/**
+ * Branch access for a service. Joint services (all_branches = TRUE, e.g. a
+ * combined all-branches gathering) can be viewed and marked by staff of ANY
+ * branch; regular services keep the strict same-branch rule.
+ */
+function checkServiceAccess(user, service) {
+  if (!service.all_branches) assertBranchAccess(user, service.branch_id);
+}
+
+/** Only the district admin may flag a service as a joint all-branches service. */
+function readAllBranches(user, body) {
+  const wanted = !!body && ['1', 'true'].includes(String(body.allBranches).toLowerCase());
+  if (!wanted) return false;
+  if (user.role !== 'district_admin') {
+    throw new ApiError(403, 'Only the main admin can create an all-branches service.');
+  }
+  return true;
 }
 
 /** Validate an optional 'YYYY-MM-DDTHH:MM[:SS]' close time from the client. */
@@ -86,11 +107,11 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   const where = [];
   const params = [];
   
-  // Branch filtering
+  // Branch filtering — but joint (all-branches) services are visible to everyone.
   const branchId = getBranchFilter(req);
   if (branchId) {
     params.push(branchId);
-    where.push(`s.branch_id = $${params.length}`);
+    where.push(`(s.branch_id = $${params.length} OR s.all_branches = TRUE)`);
   }
   
   if (search) {
@@ -123,6 +144,7 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const headcount = vInt(req.body, 'totalHeadcount', { min: 0, label: 'Total headcount' }) || 0;
   const notes = vStr(req.body, 'notes', { max: 500 });
   const closeTime = readCloseTime(req.body);
+  const allBranches = readAllBranches(req.user, req.body);
 
   // Determine branch_id — every service belongs to exactly one branch.
   let branchId = req.user.branch_id;
@@ -141,10 +163,10 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   }
 
   const { rows } = await db.query(
-    `INSERT INTO services (service_date, service_name, start_time, location_id, total_headcount, notes, created_by, attendance_close_time, branch_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO services (service_date, service_name, start_time, location_id, total_headcount, notes, created_by, attendance_close_time, branch_id, all_branches)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING id`,
-    [serviceDate, serviceName, startTime, locationId, headcount, notes, req.user.id, closeTime, branchId]
+    [serviceDate, serviceName, startTime, locationId, headcount, notes, req.user.id, closeTime, branchId, allBranches]
   );
   res.status(201).json({ service: withFlags(await serviceById(rows[0].id)) });
 }));
@@ -152,7 +174,7 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
 router.get('/:id', authenticate, asyncHandler(async (req, res) => {
   const service = await serviceById(Number(req.params.id));
   if (!service) throw new ApiError(404, 'Service not found.');
-  assertBranchAccess(req.user, service.branch_id);
+  checkServiceAccess(req.user, service);
   res.json({ service: withFlags(service) });
 }));
 
@@ -161,7 +183,7 @@ router.post('/:id/close', authenticate, requireAdmin, asyncHandler(async (req, r
   const id = Number(req.params.id);
   const service = await serviceById(id);
   if (!service) throw new ApiError(404, 'Service not found.');
-  assertBranchAccess(req.user, service.branch_id);
+  checkServiceAccess(req.user, service);
   await db.query(
     'UPDATE services SET attendance_closed = TRUE, attendance_closed_at = now(), attendance_closed_by = $1 WHERE id = $2',
     [req.user.id, id]
@@ -178,7 +200,7 @@ router.post('/:id/reopen', authenticate, requireAdmin, asyncHandler(async (req, 
   const id = Number(req.params.id);
   const service = await serviceById(id);
   if (!service) throw new ApiError(404, 'Service not found.');
-  assertBranchAccess(req.user, service.branch_id);
+  checkServiceAccess(req.user, service);
   await db.query(
     'UPDATE services SET attendance_closed = FALSE, attendance_closed_at = NULL, attendance_closed_by = NULL, attendance_close_time = NULL WHERE id = $1',
     [id]
@@ -190,7 +212,7 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
   const id = Number(req.params.id);
   const existing = await serviceById(id);
   if (!existing) throw new ApiError(404, 'Service not found.');
-  assertBranchAccess(req.user, existing.branch_id);
+  checkServiceAccess(req.user, existing);
 
   const serviceDate = vDate(req.body, 'serviceDate', { required: true, label: 'Service date' });
   const serviceName = vStr(req.body, 'serviceName', { required: true, max: 120, label: 'Service name' });
@@ -199,6 +221,7 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
   const headcount = vInt(req.body, 'totalHeadcount', { min: 0, label: 'Total headcount' }) || 0;
   const notes = vStr(req.body, 'notes', { max: 500 });
   const closeTime = readCloseTime(req.body);
+  const allBranches = readAllBranches(req.user, req.body) || (existing.all_branches && req.body.allBranches === undefined);
 
   // District admins may move a service to another branch.
   let branchId = existing.branch_id;
@@ -220,9 +243,9 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
     `UPDATE services
         SET service_date = $1, service_name = $2, start_time = $3,
             location_id = $4, total_headcount = $5, notes = $6, attendance_close_time = $7,
-            branch_id = $8
-      WHERE id = $9`,
-    [serviceDate, serviceName, startTime, locationId, headcount, notes, closeTime, branchId, id]
+            branch_id = $8, all_branches = $9
+      WHERE id = $10`,
+    [serviceDate, serviceName, startTime, locationId, headcount, notes, closeTime, branchId, allBranches, id]
   );
   res.json({ service: withFlags(await serviceById(id)) });
 }));
@@ -231,7 +254,7 @@ router.get('/:id/attendance', authenticate, requireAdmin, asyncHandler(async (re
   const id = Number(req.params.id);
   const service = await serviceById(id);
   if (!service) throw new ApiError(404, 'Service not found.');
-  assertBranchAccess(req.user, service.branch_id);
+  checkServiceAccess(req.user, service);
 
   const { rows } = await db.query(
     `SELECT a.id, a.status, a.notes, a.recorded_at, a.updated_at,
@@ -250,7 +273,7 @@ router.get('/:id/attendance', authenticate, requireAdmin, asyncHandler(async (re
       ORDER BY m.full_name ASC`,
     [id]
   );
-  res.json({ service: withFlags(service), totals: await getServiceTotals(db, id, service.branch_id), items: rows });
+  res.json({ service: withFlags(service), totals: await getServiceTotals(db, id, service.all_branches ? null : service.branch_id), items: rows });
 }));
 
 module.exports = router;

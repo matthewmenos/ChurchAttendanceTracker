@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS members (
   profession          TEXT,
   residence           TEXT,
   age                 INTEGER CHECK (age >= 0),
+  member_code         TEXT,
   branch_id           INTEGER REFERENCES branches(id) ON DELETE SET NULL,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -119,6 +120,7 @@ CREATE TABLE IF NOT EXISTS services (
   attendance_closed_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
   attendance_close_time   TIMESTAMPTZ,
   branch_id               INTEGER REFERENCES branches(id) ON DELETE SET NULL,
+  all_branches            BOOLEAN NOT NULL DEFAULT FALSE,
   created_by              INTEGER REFERENCES users(id),
   created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -337,6 +339,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS members_member_code_idx ON members(member_code
 -- unique by construction (id suffix), so re-running never collides.
 UPDATE members SET member_code = upper(substr(md5('cat-member-' || id::text), 1, 6)) || '-' || id::text
 WHERE member_code IS NULL;
+
+-- Joint (all-branches) services: ushers of EVERY branch can mark attendance.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS all_branches BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Re-point orphaned rows at the default branch.
 UPDATE users         SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;

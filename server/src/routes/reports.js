@@ -350,7 +350,20 @@ router.get('/branches', requireDistrictAdmin, asyncHandler(async (req, res) => {
     };
   });
 
-  res.json({ from, to, branches });
+  // Church-wide roll-up for the district admin, including active members whose
+  // branch row no longer exists (branch_id IS NULL) so nobody is invisible.
+  const { rows: totalsRows } = await db.query(
+    `SELECT (SELECT COUNT(*) FROM members WHERE status = 'active') AS total_active_members,
+            (SELECT COUNT(*) FROM members WHERE branch_id IS NULL) AS unassigned_members,
+            (SELECT COUNT(*) FROM branches WHERE status = 'active') AS branch_count`
+  );
+  const totals = {
+    total_active_members: Number(totalsRows[0].total_active_members),
+    unassigned_members: Number(totalsRows[0].unassigned_members),
+    branch_count: Number(totalsRows[0].branch_count),
+  };
+
+  res.json({ from, to, totals, branches });
 }));
 
 module.exports = router;

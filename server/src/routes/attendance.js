@@ -24,7 +24,7 @@ async function serviceById(id) {
   const { rows } = await db.query(
     `SELECT s.id, s.service_date, s.service_name, s.start_time, s.total_headcount,
             s.attendance_closed, s.attendance_close_time, l.name AS location_name,
-            s.branch_id, b.name AS branch_name
+            s.branch_id, b.name AS branch_name, s.all_branches
        FROM services s
        LEFT JOIN locations l ON l.id = s.location_id
        LEFT JOIN branches b ON b.id = s.branch_id
@@ -42,6 +42,15 @@ function isMarkingClosed(svc) {
     svc.attendance_closed
     || (!!svc.attendance_close_time && new Date(svc.attendance_close_time).getTime() <= Date.now())
   );
+}
+
+/**
+ * Branch access for a service. Joint services (all_branches = TRUE, e.g. a
+ * combined all-branches gathering) may be viewed and marked by staff of ANY
+ * branch; regular services keep the strict same-branch rule.
+ */
+function checkServiceAccess(user, service) {
+  if (!service.all_branches) assertBranchAccess(user, service.branch_id);
 }
 
 function closedMessage(svc) {
@@ -73,7 +82,7 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
   if (!service) throw new ApiError(404, 'Service not found.');
 
   // Check branch access
-  assertBranchAccess(req.user, service.branch_id);
+  checkServiceAccess(req.user, service);
 
   const search = vStr(req.query, 'search', { max: 100 }) || '';
   const groupId = vInt(req.query, 'groupId');
@@ -161,7 +170,10 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
     service: {
     ...service,
     marking_closed: isMarkingClosed(service),
-    totals: await getServiceTotals(db, serviceId, service.branch_id),
+    all_branches: !!service.all_branches,
+    // For a joint (all-branches) service the eligible pool is every active
+    // member of every branch; otherwise it is the service's branch only.
+    totals: await getServiceTotals(db, serviceId, service.all_branches ? null : service.branch_id),
   },
     rows: outRows,
     markedCount: Number(markedRow.marked),
@@ -220,14 +232,15 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
   const service = await serviceById(serviceId);
   if (!service) throw new ApiError(404, 'Service not found.');
   // Only staff of the service's branch may mark attendance for it.
-  assertBranchAccess(req.user, service.branch_id);
+  checkServiceAccess(req.user, service);
   if (isMarkingClosed(service)) throw new ApiError(403, closedMessage(service));
 
   const { rows: memberRows } = await db.query('SELECT id, status, branch_id FROM members WHERE id = $1', [memberId]);
   const member = memberRows[0];
   if (!member) throw new ApiError(404, 'Member not found.');
-  // Members belong to a branch; they can only be marked for that branch's services.
-  if (member.branch_id !== service.branch_id) {
+  // Members belong to a branch; they can only be marked for that branch's
+  // services — except at a joint (all-branches) service, where everyone gathers.
+  if (!service.all_branches && member.branch_id !== service.branch_id) {
     throw new ApiError(400, 'This member belongs to a different branch than this service.');
   }
   if (member.status !== 'active') {
@@ -263,7 +276,7 @@ router.put('/:id', authenticate, asyncHandler(async (req, res) => {
   if (!record) throw new ApiError(404, 'Attendance record not found.');
 
   const svc = await serviceById(record.service_id);
-  assertBranchAccess(req.user, svc.branch_id);
+  checkServiceAccess(req.user, svc);
   if (isMarkingClosed(svc)) throw new ApiError(403, closedMessage(svc));
 
   if (!isAdminUser(req.user)) {
@@ -309,7 +322,7 @@ router.post('/code', authenticate, asyncHandler(async (req, res) => {
 
   const service = await serviceById(serviceId);
   if (!service) throw new ApiError(404, 'Service not found.');
-  assertBranchAccess(req.user, service.branch_id);
+  checkServiceAccess(req.user, service);
   if (isMarkingClosed(service)) throw new ApiError(403, closedMessage(service));
 
   const { rows: memberRows } = await db.query(
@@ -318,7 +331,7 @@ router.post('/code', authenticate, asyncHandler(async (req, res) => {
   );
   const member = memberRows[0];
   if (!member) throw new ApiError(404, 'No member matches that code.');
-  if (member.branch_id !== service.branch_id) {
+  if (!service.all_branches && member.branch_id !== service.branch_id) {
     throw new ApiError(400, 'This member belongs to a different branch than this service.');
   }
   if (member.status !== 'active') {
@@ -405,7 +418,7 @@ router.delete('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) 
   const { rows } = await db.query('SELECT member_id, service_id FROM attendance WHERE id = $1', [id]);
   if (!rows.length) throw new ApiError(404, 'Attendance record not found.');
   const svc = await serviceById(rows[0].service_id);
-  assertBranchAccess(req.user, svc.branch_id);
+  checkServiceAccess(req.user, svc);
   if (isMarkingClosed(svc)) throw new ApiError(403, closedMessage(svc));
   await db.query('DELETE FROM attendance WHERE id = $1 RETURNING member_id', [id]);
   await recomputeMemberAndSync(db, rows[0].member_id, req.user.id);
