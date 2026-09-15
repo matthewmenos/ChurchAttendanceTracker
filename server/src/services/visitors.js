@@ -79,10 +79,16 @@ async function listVisitors({ serviceId, createdBy, branchId, followupStatus, se
   const params = [];
   if (serviceId) { params.push(serviceId); where.push(`v.service_id = $${params.length}`); }
   if (createdBy) { params.push(createdBy); where.push(`v.created_by = $${params.length}`); }
-  // Branch scoping via the visitor's service (works in both data & count queries).
+  // Mirrors convertToMember(): a visitor belongs to the branch of the service
+  // they attended, or - when the visit had no service - to the branch of the
+  // user who captured them. The same predicate feeds the COUNT query below.
   if (branchId) {
     params.push(branchId);
-    where.push(`v.service_id IN (SELECT id FROM services WHERE branch_id = $${params.length})`);
+    const n = params.length;
+    where.push(
+      `(v.service_id IN (SELECT id FROM services WHERE branch_id = $${n})
+        OR (v.service_id IS NULL AND v.created_by IN (SELECT id FROM users WHERE branch_id = $${n})))`
+    );
   }
   if (followupStatus) { params.push(followupStatus); where.push(`v.followup_status = $${params.length}`); }
   if (search) {
@@ -164,11 +170,12 @@ async function convertToMember(visitorId) {
   return { visitor: await findVisitor(visitorId), member_id: memberId, alreadyConverted: false };
 }
 
-async function visitorStats({ from, to } = {}) {
+async function visitorStats({ from, to, branchId } = {}) {
   const where = [];
   const params = [];
   if (from) { params.push(from); where.push(`s.service_date >= $${params.length}`); }
   if (to) { params.push(to); where.push(`s.service_date <= $${params.length}`); }
+  if (branchId) { params.push(branchId); where.push(`s.branch_id = $${params.length}`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const { rows } = await db.query(
     `SELECT s.id, s.service_name, s.service_date,

@@ -307,6 +307,15 @@ ALTER TABLE services      ADD COLUMN IF NOT EXISTS branch_id INTEGER REFERENCES 
 ALTER TABLE member_groups ADD COLUMN IF NOT EXISTS branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL;
 ALTER TABLE locations     ADD COLUMN IF NOT EXISTS branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL;
 
+-- Member profile columns (safe if the table already existed from old schema).
+ALTER TABLE members ADD COLUMN IF NOT EXISTS birthday         DATE;
+ALTER TABLE members ADD COLUMN IF NOT EXISTS gender           TEXT CHECK (gender IN ('male', 'female'));
+ALTER TABLE members ADD COLUMN IF NOT EXISTS age             INTEGER CHECK (age >= 0);
+ALTER TABLE members ADD COLUMN IF NOT EXISTS membership_type TEXT CHECK (membership_type IN ('new_convert', 'existing'));
+ALTER TABLE members ADD COLUMN IF NOT EXISTS marital_status  TEXT CHECK (marital_status IN ('single', 'married', 'divorced', 'widowed'));
+ALTER TABLE members ADD COLUMN IF NOT EXISTS profession      TEXT;
+ALTER TABLE members ADD COLUMN IF NOT EXISTS residence       TEXT;
+
 -- Branch indexes (resolved here in case tables pre-existed).
 CREATE INDEX IF NOT EXISTS users_branch_idx          ON users(branch_id);
 CREATE INDEX IF NOT EXISTS members_branch_idx        ON members(branch_id);

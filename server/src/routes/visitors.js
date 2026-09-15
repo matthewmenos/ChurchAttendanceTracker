@@ -2,7 +2,7 @@ const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vEmail, vEnum, vDate } = require('../utils/validate');
-const { authenticate, requireAdmin, assertBranchAccess } = require('../middleware/auth');
+const { authenticate, requireAdmin, isAdminRole, assertBranchAccess } = require('../middleware/auth');
 const { createVisitor, listVisitors, updateVisitor, convertToMember, visitorStats } = require('../services/visitors');
 
 const router = express.Router();
@@ -33,13 +33,17 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
   res.status(201).json(result);
 }));
 
-// Ushers can list visitors captured for the service they are marking,
-// or every visitor they personally captured (mine=1).
+// Ushers must scope the list to the service they are marking (serviceId) or to
+// the visitors they personally captured (mine=1). Admins -- district and branch
+// -- browse the whole register (branch-scoped where applicable), which is what
+// the admin Visitors screen does.
 router.get('/', authenticate, asyncHandler(async (req, res) => {
   const isDistrictAdmin = req.user.role === 'district_admin';
   const serviceId = vInt(req.query, 'serviceId');
   const mine = ['1', 'true'].includes(String(req.query.mine));
-  if (!isDistrictAdmin && !serviceId && !mine) throw new ApiError(400, 'Pass a serviceId or mine=1 to list visitors.');
+  if (!isAdminRole(req.user.role) && !serviceId && !mine) {
+    throw new ApiError(400, 'Pass a serviceId or mine=1 to list visitors.');
+  }
   const result = await listVisitors({
     serviceId: serviceId || undefined,
     createdBy: mine ? req.user.id : undefined,
@@ -57,17 +61,43 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
 router.use(authenticate, requireAdmin);
 
 router.get('/stats', asyncHandler(async (req, res) => {
-  res.json({ items: await visitorStats({ from: vDate(req.query, 'from'), to: vDate(req.query, 'to') }) });
+  res.json({ items: await visitorStats({
+    from: vDate(req.query, 'from'),
+    to: vDate(req.query, 'to'),
+    // Branch admins only see their own branch's visitor totals.
+    branchId: req.user.role === 'district_admin' ? undefined : (req.user.branch_id || -1),
+  }) });
 }));
 
-router.get('/:id', asyncHandler(async (req, res) => {
+/**
+ * Loads a visitor and enforces branch access. A visitor belongs to the branch of
+ * the service they attended, falling back to the branch of the user who captured
+ * them -- the same rule convertToMember() uses. District admins see everything.
+ */
+async function loadVisitorForUser(req, id) {
   const { findVisitor } = require('../services/visitors');
-  const visitor = await findVisitor(Number(req.params.id));
+  const visitor = await findVisitor(Number(id));
   if (!visitor) throw new ApiError(404, 'Visitor not found.');
-  res.json({ visitor });
+  if (req.user.role !== 'district_admin') {
+    const { rows } = await db.query(
+      `SELECT COALESCE(s.branch_id, u.branch_id) AS branch_id
+         FROM visitors v
+         LEFT JOIN services s ON s.id = v.service_id
+         LEFT JOIN users u ON u.id = v.created_by
+        WHERE v.id = $1`,
+      [visitor.id]
+    );
+    assertBranchAccess(req.user, rows[0] && rows[0].branch_id);
+  }
+  return visitor;
+}
+
+router.get('/:id', asyncHandler(async (req, res) => {
+  res.json({ visitor: await loadVisitorForUser(req, req.params.id) });
 }));
 
 router.put('/:id', asyncHandler(async (req, res) => {
+  await loadVisitorForUser(req, req.params.id);
   const { followupStatus, gender, ageGroup } = req.body || {};
   const allowed = ['new', 'contacted', 'visited', 'joined', 'lost'];
   if (followupStatus !== undefined && !allowed.includes(followupStatus)) {
@@ -84,6 +114,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
 }));
 
 router.post('/:id/convert', asyncHandler(async (req, res) => {
+  await loadVisitorForUser(req, req.params.id);
   const result = await convertToMember(Number(req.params.id));
   res.json(result);
 }));
