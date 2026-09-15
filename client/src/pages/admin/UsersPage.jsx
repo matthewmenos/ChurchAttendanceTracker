@@ -79,7 +79,10 @@ export default function UsersPage() {
       role: editing ? (canEditRole ? roleValue : undefined) : roleValue,
       branchId: editing
         ? (canEditRole ? (branchValue ? Number(branchValue) : null) : undefined)
-        : (isDistrict && branchValue ? Number(branchValue) : undefined),
+        : (isDistrict
+          ? (branchValue ? Number(branchValue) : undefined)
+          : (me.branch_id || undefined)
+        ),
     };
     setSaving(true);
     setFormError('');

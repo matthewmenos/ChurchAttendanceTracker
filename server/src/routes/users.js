@@ -95,7 +95,20 @@ router.post('/', asyncHandler(async (req, res) => {
   const email = vEmail(req.body, 'email', { required: true });
   const phone = vStr(req.body, 'phone', { max: 40 });
   const role = vEnum(req.body, 'role', ['district_admin', 'branch_admin', 'usher']) || 'usher';
-  const branchId = vInt(req.body, 'branchId');
+  let branchId = vInt(req.body, 'branchId');
+
+  // Branch admins always operate inside their own branch: when the client
+  // doesn't send a branchId we default to theirs, and any other value is
+  // rejected (they may not place ushers in another branch).
+  if (req.user.role === 'branch_admin') {
+    if (!branchId) branchId = req.user.branch_id || null;
+    if (!branchId) {
+      throw new ApiError(400, 'Your account has no branch assigned. Ask a district admin to set your branch first.');
+    }
+    if (branchId !== req.user.branch_id) {
+      throw new ApiError(403, 'You can only create users in your own branch.');
+    }
+  }
 
   // Validate branch_id based on role
   if (role === 'district_admin' && branchId) {
