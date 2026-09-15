@@ -15,7 +15,7 @@ export default function AccessDeniedPage() {
         </p>
         <div className='message-actions'>
           {user ? (
-            <Link className='btn btn-primary' to={user.role === 'admin' ? '/admin' : '/usher'}>
+            <Link className='btn btn-primary' to={user.role === 'usher' ? '/usher' : '/admin'}>
               Go to my home page
             </Link>
           ) : (

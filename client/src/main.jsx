@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
 import { AuthProvider } from './auth/AuthContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
+import OfflinePage from './pages/OfflinePage.jsx';
 import './styles.css';
 
 // Register the PWA service worker (precaches the app shell, runtime-caches
@@ -15,6 +16,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <ToastProvider>
+        <OfflinePage />
         <AuthProvider>
           <App />
         </AuthProvider>

@@ -11,6 +11,18 @@ import { Table } from '../../components/ui/Table.jsx';
 import { formatDate, formatShortDate, timeAgo } from '../../utils/format.js';
 import { IconFileText } from '../../components/ui/icons.jsx';
 
+const ROLE_LABEL = {
+  district_admin: 'District admin',
+  branch_admin: 'Branch admin',
+  usher: 'Usher',
+};
+
+const ROLE_BADGE = {
+  district_admin: 'info',
+  branch_admin: 'warning',
+  usher: 'neutral',
+};
+
 export default function UsersPage() {
   const toast = useToast();
   const { user: me, branches } = useAuth();
@@ -144,7 +156,15 @@ export default function UsersPage() {
                   </span>
                 ),
               },
-              { key: 'role', label: 'Role', render: (u) => <Badge variant={u.role === 'admin' ? 'info' : 'neutral'}>{u.role === 'admin' ? 'Admin' : 'Usher'}</Badge> },
+              {
+                key: 'role',
+                label: 'Role',
+                render: (u) => (
+                  <Badge variant={ROLE_BADGE[u.role] || 'neutral'}>
+                    {ROLE_LABEL[u.role] || u.role}
+                  </Badge>
+                ),
+              },
               { key: 'status', label: 'Status', render: (u) => <Badge variant={u.status}>{u.status === 'active' ? 'Active' : 'Inactive'}</Badge> },
               { key: 'must_change_password', label: 'Credentials', render: (u) => (u.must_change_password ? <Badge variant='warning'>Temp password</Badge> : <Badge variant='ok'>Set</Badge>) },
               { key: 'last_login_at', label: 'Last login', render: (u) => (u.last_login_at ? timeAgo(u.last_login_at) : 'Never') },

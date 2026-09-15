@@ -12,6 +12,7 @@ import MemberDetailPage from './pages/admin/MemberDetailPage.jsx';
 import ServicesPage from './pages/admin/ServicesPage.jsx';
 import ServiceDetailPage from './pages/admin/ServiceDetailPage.jsx';
 import ReportsPage from './pages/admin/ReportsPage.jsx';
+import FollowUpsPage from './pages/admin/FollowUpsPage.jsx';
 import UsersPage from './pages/admin/UsersPage.jsx';
 import SettingsPage from './pages/admin/SettingsPage.jsx';
 import VisitorsPage from './pages/admin/VisitorsPage.jsx';
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="services" element={<ServicesPage />} />
             <Route path="services/:id" element={<ServiceDetailPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path='followups' element={<FollowUpsPage />} />
             <Route path="visitors" element={<VisitorsPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path='settings' element={<SettingsPage />} />

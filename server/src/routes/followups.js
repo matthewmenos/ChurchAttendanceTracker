@@ -2,7 +2,7 @@ const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vEnum, vDate } = require('../utils/validate');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, assertBranchAccess, getBranchFilter } = require('../middleware/auth');
 const { syncFollowUps } = require('../services/followups');
 
 const router = express.Router();
@@ -10,7 +10,7 @@ router.use(authenticate, requireAdmin);
 
 async function findFollowUp(id) {
   const { rows } = await db.query(
-    `SELECT f.*, m.full_name AS member_name,
+    `SELECT f.*, m.full_name AS member_name, m.branch_id AS member_branch_id,
             COALESCE((
               SELECT string_agg(g.name, ', ' ORDER BY g.name)
                 FROM member_group_assignments mga JOIN member_groups g ON g.id = mga.group_id
@@ -31,15 +31,20 @@ router.get('/', asyncHandler(async (req, res) => {
   const status = vEnum(req.query, 'status', ['all', 'open', 'closed']) || 'open';
   const memberId = vInt(req.query, 'memberId');
 
+  // Branch admins only review follow-ups of their own branch's members;
+  // district admins may narrow to one branch with ?branchId=.
+  const scopeBranchId = getBranchFilter(req);
+
   const where = [];
   const params = [];
   if (priority !== 'all') { params.push(priority); where.push(`f.priority = $${params.length}`); }
   if (status !== 'all') { params.push(status); where.push(`f.status = $${params.length}`); }
   if (memberId) { params.push(memberId); where.push(`f.member_id = $${params.length}`); }
+  if (scopeBranchId != null) { params.push(scopeBranchId); where.push(`m.branch_id = $${params.length}`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
   const { rows } = await db.query(
-    `SELECT f.*, m.full_name AS member_name,
+    `SELECT f.*, m.full_name AS member_name, m.branch_id AS member_branch_id,
             COALESCE((
               SELECT string_agg(g.name, ', ' ORDER BY g.name)
                 FROM member_group_assignments mga JOIN member_groups g ON g.id = mga.group_id
@@ -65,8 +70,9 @@ router.post('/', asyncHandler(async (req, res) => {
   const priority = vEnum(req.body, 'priority', ['high', 'medium', 'low']) || 'medium';
   const assignedTo = vStr(req.body, 'assignedTo', { max: 120 });
 
-  const member = await db.query('SELECT id FROM members WHERE id = $1', [memberId]);
+  const member = await db.query('SELECT id, branch_id FROM members WHERE id = $1', [memberId]);
   if (!member.rows.length) throw new ApiError(404, 'Member not found.');
+  assertBranchAccess(req.user, member.rows[0].branch_id);
 
   const { rows } = await db.query(
     `INSERT INTO follow_ups (member_id, absent_weeks, last_seen, reason, priority, assigned_to, created_by)
@@ -81,6 +87,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const existing = await findFollowUp(id);
   if (!existing) throw new ApiError(404, 'Follow-up not found.');
+  assertBranchAccess(req.user, existing.member_branch_id);
 
   const absentWeeks = vInt(req.body, 'absentWeeks', { min: 0 });
   const lastSeen = vDate(req.body, 'lastSeen', {});
@@ -107,14 +114,23 @@ router.put('/:id', asyncHandler(async (req, res) => {
 }));
 
 router.delete('/:id', asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const existing = await findFollowUp(id);
+  if (!existing) throw new ApiError(404, 'Follow-up not found.');
+  assertBranchAccess(req.user, existing.member_branch_id);
   const { rowCount } = await db.query('DELETE FROM follow_ups WHERE id = $1', [Number(req.params.id)]);
   if (!rowCount) throw new ApiError(404, 'Follow-up not found.');
   res.status(204).end();
 }));
 
-/** Scan all members and auto-create follow-ups for those past the threshold. */
+/** Scan members and auto-create follow-ups for those past the threshold. */
 router.post('/sync', asyncHandler(async (req, res) => {
-  const result = await syncFollowUps(db, { createdBy: req.user.id });
+  // Branch admins only scan their own branch; district admins may scan one
+  // branch (?branchId=) or every branch when no branch is selected.
+  const branchId = req.user.role === 'district_admin'
+    ? (req.query.branchId ? Number(req.query.branchId) : null)
+    : (req.user.branch_id || -1);
+  const result = await syncFollowUps(db, { createdBy: req.user.id, branchId });
   res.json({
     threshold: result.threshold,
     disabled: result.disabled,

@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png'],
+      includeAssets: ['icons/logo.png'],
       manifest: {
         name: 'Church Attendance Tracker',
         short_name: 'Attendance',
@@ -19,10 +19,8 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-          { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml' },
+          { src: '/icons/logo.png', sizes: '497x502', type: 'image/png', purpose: 'any' },
+          { src: '/icons/logo.png', sizes: '497x502', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {

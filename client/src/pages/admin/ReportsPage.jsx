@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useFetch from '../../hooks/useFetch.js';
 import { api } from '../../api/client.js';
+import { useAuth } from '../../auth/AuthContext.jsx';
 import { PageHeader, StatCard } from '../../components/ui/display.jsx';
 import { ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
 import { Button, Field, Select } from '../../components/ui/forms.jsx';
@@ -35,7 +36,8 @@ export default function ReportsPage() {
     document.title = 'Reports — Church Attendance Tracker';
   }, []);
 
-  const summaryQ = useFetch(() => api('/reports/summary', { params: { from, to } }), [rangeKey]);
+  const { currentBranchId } = useAuth();
+  const summaryQ = useFetch(() => api('/reports/summary', { params: { from, to, branchId: currentBranchId || undefined } }), [rangeKey, currentBranchId]);
   const visitorsQ = useFetch(() => api('/visitors/stats', { params: { from, to } }), [rangeKey]);
   const data = summaryQ.data;
   const visitorStats = (visitorsQ.data && visitorsQ.data.items) || [];

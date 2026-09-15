@@ -55,18 +55,24 @@ async function syncFollowUpForMember(instance, memberId, opts = {}) {
   return { created: true, followUpId: inserted[0].id, memberId, streak: member.consecutive_absences, priority };
 }
 
-/** Scan every active member and create follow-ups for those past the threshold. */
+/**
+ * Scan active members and create follow-ups for those past the threshold.
+ * Pass opts.branchId to limit the scan to a single branch (branch admins).
+ */
 async function syncFollowUps(instance, opts = {}) {
   const threshold = opts.threshold !== undefined ? opts.threshold : await readThreshold(instance);
   if (!threshold) return { threshold: 0, disabled: true, created: [] };
 
+  const branchId = opts.branchId ? Number(opts.branchId) : null;
   const { rows } = await instance.query(
-    `SELECT id FROM members WHERE status = 'active' AND consecutive_absences >= $1`,
-    [threshold]
+    `SELECT id FROM members
+      WHERE status = 'active' AND consecutive_absences >= $1
+        AND ($2::int IS NULL OR branch_id = $2)`,
+    [threshold, branchId]
   );
   const created = [];
   for (const m of rows) {
-    const r = await syncFollowUpForMember(instance, m.id, { threshold, createdBy: opts.createdBy });
+    const r = await syncFollowUpForMember(instance, m.id, { threshold, createdBy: opts.createdBy, branchId });
     if (r.created) created.push(r);
   }
   return { threshold, disabled: false, created };

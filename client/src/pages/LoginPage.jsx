@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { api } from '../api/client.js';
 import { Alert } from '../components/ui/feedback.jsx';
 import { Button, Field, Input, PasswordInput } from '../components/ui/forms.jsx';
-import { IconChurch } from '../components/ui/icons.jsx';
+import Logo from '../components/ui/Logo.jsx';
 
 export default function LoginPage() {
   const { user, initializing, login } = useAuth();
@@ -15,7 +15,6 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [churchName, setChurchName] = useState('');
-  const [logo, setLogo] = useState('');
   const CHURCH_NAME = import.meta.env.VITE_CHURCH_NAME || 'Church Attendance Tracker';
   const DISTRICT_ADMIN_ROLE = 'district_admin';
 
@@ -24,7 +23,6 @@ export default function LoginPage() {
     api('/branding')
       .then((data) => {
         if (data && data.churchName) setChurchName(data.churchName);
-        if (data && data.logo) setLogo(data.logo);
       })
       .catch(() => {
         // branding endpoint unreachable — heading falls back below
@@ -58,7 +56,7 @@ export default function LoginPage() {
     <div className='login-page'>
       <div className='login-card card'>
         <div className='login-brand'>
-          {logo ? <img src={logo} alt='' className='login-logo big' aria-hidden='true' /> : <span className='brand-mark big' aria-hidden='true'><IconChurch size={28} /></span>}
+          <Logo big />
           <h1>{churchName || CHURCH_NAME}</h1>
           <p className='muted'>Attendance Tracker · Sign in to continue</p>
         </div>

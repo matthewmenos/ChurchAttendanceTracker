@@ -22,7 +22,7 @@ export default function UsherLayout() {
     <div className='usher-shell'>
       <header className='usher-topbar'>
         <div className='usher-brand'>
-          <Logo size={22} />
+          <Logo />
           <span>{(user && user.churchName) || 'Attendance'}</span>
         </div>
         <div className='usher-user'>

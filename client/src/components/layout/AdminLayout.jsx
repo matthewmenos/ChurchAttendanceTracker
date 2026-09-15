@@ -14,6 +14,7 @@ import {
   IconUsers,
   IconCalendar,
   IconTrendingUp,
+  IconClipboardList,
   IconShield,
   IconSettings,
   IconMapPin,
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { to: '/admin/members', label: 'Members', icon: IconUsers },
   { to: '/admin/services', label: 'Services', icon: IconCalendar },
   { to: '/admin/reports', label: 'Reports', icon: IconTrendingUp },
+  { to: '/admin/followups', label: 'Follow-ups', icon: IconClipboardList },
   { to: '/admin/visitors', label: 'Visitors', icon: IconUsers },
   { to: '/admin/users', label: 'Users', icon: IconShield },
   { to: '/admin/settings', label: 'Settings', icon: IconSettings },
@@ -80,7 +82,7 @@ export default function AdminLayout() {
       <a className='skip-link' href='#main-content'>Skip to content</a>
       <aside className={'sidebar' + (navOpen ? ' open' : '')}>
         <div className='sidebar-brand'>
-          <Logo size={22} />
+          <Logo />
           <span className='brand-text'>{(user && user.churchName) || 'Church Attendance'}</span>
         </div>
         {nav}
