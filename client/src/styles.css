@@ -39,6 +39,10 @@
 }
 
 html { font-size: 16px; }
+/* Never let wide content push the page sideways on mobile. `clip` (unlike
+   `hidden`) does not create a scroll container, so the sticky sidebar and
+   topbar keep working. */
+html, body { overflow-x: hidden; overflow-x: clip; }
 body {
   margin: 0;
   font-family: var(--font);
@@ -46,6 +50,7 @@ body {
   background: var(--bg);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
 }
 h1, h2, h3 { margin: 0 0 .35em; line-height: 1.25; }
 h1 { font-size: 1.55rem; }
@@ -55,6 +60,12 @@ a { color: var(--blue-700); text-decoration: none; }
 a:hover { text-decoration: underline; }
 code { background: var(--blue-50); border: 1px solid var(--blue-100); padding: 2px 8px; border-radius: 6px; font-size: .82rem; display: inline-block; margin: 3px 0; }
 img, svg { vertical-align: middle; }
+img, video { max-width: 100%; height: auto; }
+/* Kill double-tap zoom delays and let flex/grid children shrink instead of
+   forcing the page wider on narrow phones. */
+button, input, select, textarea { touch-action: manipulation; }
+input, select, textarea, .input { min-width: 0; max-width: 100%; }
+#root { min-width: 0; overflow-x: hidden; overflow-x: clip; }
 
 :focus-visible { outline: 3px solid var(--yellow-500); outline-offset: 2px; border-radius: 4px; }
 
@@ -226,7 +237,9 @@ select.input { appearance: auto; }
 .stat-value { font-size: 1.65rem; font-weight: 800; margin: 2px 0; }
 .stat-sub { font-size: .8rem; color: var(--ink-600); }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
-.page-subtitle { color: var(--ink-600); margin: 2px 0 0; }
+.page-header > div:first-child { flex: 1 1 200px; min-width: 0; }
+.page-header h1, .page-header h2 { overflow-wrap: anywhere; }
+.page-subtitle { color: var(--ink-600); margin: 2px 0 0; overflow-wrap: anywhere; }
 .page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
 .section-title { font-size: 1.02rem; margin: 22px 0 10px; }
@@ -384,8 +397,8 @@ table.table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 .usher-brand > span:last-child {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw;
 }
-.usher-user { display: flex; align-items: center; gap: 9px; }
-.usher-name { font-weight: 600; }
+.usher-user { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.usher-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .usher-user .icon-btn:hover { background: rgba(255,255,255,.15); }
 .usher-main { flex: 1; padding-top: 8px; }
 .usher-banner { padding-bottom: 0; }
@@ -517,10 +530,12 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
 }
 .bottom-nav-item {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  padding: 6px 4px; border-radius: 10px;
+  min-width: 0; padding: 6px 4px; border-radius: 10px;
   color: var(--ink-600); font-size: .72rem; font-weight: 600;
   text-decoration: none; border-top: 3px solid transparent; margin-top: -9px;
+  overflow: hidden;
 }
+.bottom-nav-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .bottom-nav-item:hover { background: #f4f6fb; color: var(--blue-700); text-decoration: none; }
 .bottom-nav-item.active { color: var(--blue-700); border-top-color: var(--yellow-500); }
 .usher-main { padding-bottom: 92px; }
@@ -555,6 +570,7 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
   .table td {
     display: flex; justify-content: space-between; align-items: center; gap: 14px;
     border: none; padding: 5px 14px;
+    overflow-wrap: anywhere; /* long emails/links must wrap, not widen the page */
   }
   .table td::before {
     content: attr(data-label);
@@ -586,6 +602,21 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
   /* filter rows: give each control the full width instead of squeezing */
   .filter-bar .field, .filter-bar .search-input, .filter-bar .select-fit { flex-basis: 100%; }
   .filter-bar .btn { flex: 1 1 auto; }
+  /* fixed-min-width flex children must shrink on narrow phones */
+  .member-hero-main { min-width: 0; }
+  .page-header { flex-wrap: wrap; }
+  .temp-password-row { flex-wrap: wrap; }
+  .temp-password { overflow-wrap: anywhere; }
+  /* long unbroken text must wrap inside cards, never widen the page */
+  .card, .alert, .message-card, .modal, .empty-state { min-width: 0; overflow-wrap: anywhere; }
+  .member-card-header, .member-card-meta { min-width: 0; }
+  .attendance-row-main, .follow-meta, .user-info { min-width: 0; overflow-wrap: anywhere; }
+  /* action buttons fill the row instead of squeezing side by side */
+  .member-card-actions .btn { flex: 1 1 140px; }
+  .roster-actions .btn, .service-header-actions .btn, .header-actions .btn { flex: 1 1 auto; }
+  /* usher search: stack input and select instead of overflowing */
+  .search-row { flex-wrap: wrap; }
+  .search-input, .select-flex { flex: 1 1 100%; }
 }
 
 @media (max-width: 480px) {
@@ -738,6 +769,8 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
   flex-wrap: wrap;
   gap: 4px;
   justify-content: flex-end;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .member-card-actions {

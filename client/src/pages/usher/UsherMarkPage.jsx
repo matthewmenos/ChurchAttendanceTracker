@@ -73,8 +73,11 @@ export default function UsherMarkPage() {
 
   const markByCode = async (e) => {
     e.preventDefault();
-    const c = code.trim();
-    if (!c || codeBusy) return;
+    const c = code.trim().replace(/\D/g, '').slice(0, 4);
+    if (c.length !== 4 || codeBusy) {
+      if (c.length !== 4) setCodeMsg({ tone: 'err', text: 'Enter the 4-digit member PIN.' });
+      return;
+    }
     setCodeBusy(true);
     setCodeMsg(null);
     try {
@@ -158,15 +161,15 @@ export default function UsherMarkPage() {
 
       {!closed && (
         <form className='card pad' style={{ marginBottom: 12 }} onSubmit={markByCode}>
-          <Field label='Quick add by door code' id='usher-code' hint='Type the member code and press Enter to mark them present.'>
+          <Field label='Quick add by member PIN' id='usher-code' hint='Type the 4-digit member PIN and press Enter to mark them present.'>
             <input
               id='usher-code'
               className='input'
               value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder='e.g. K7Q2M1'
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              placeholder='e.g. 4821'
               autoComplete='off'
-              autoCapitalize='characters'
+              inputMode='numeric'
               maxLength={20}
               disabled={codeBusy}
             />

@@ -50,7 +50,7 @@ function MemberCard({ member: m, expanded, onToggle, onEdit, onToggleStatus, onT
             <DetailRow label='Gender' value={genderLabel || '—'} />
             <DetailRow label='Birthday' value={m.birthday ? formatShortDate(m.birthday) : '—'} />
             <DetailRow label='Age' value={m.age != null ? `${m.age}` : '—'} />
-            <DetailRow label='Door code' value={m.member_code ? <code style={{ letterSpacing: 2, fontWeight: 700 }}>{m.member_code}</code> : '—'} />
+            <DetailRow label='PIN' value={m.member_code ? <code style={{ letterSpacing: 4, fontWeight: 700 }}>{m.member_code}</code> : '—'} />
             <DetailRow label='Membership' value={membershipLabel || '—'} />
             <DetailRow label='Marital status' value={maritalLabel || '—'} />
             <DetailRow label='Profession' value={m.profession || '—'} />

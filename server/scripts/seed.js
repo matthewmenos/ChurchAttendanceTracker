@@ -5,6 +5,7 @@
 const db = require('../src/config/db');
 const env = require('../src/config/env');
 const { hashPassword } = require('../src/utils/passwords');
+const { generateMemberCode } = require('../src/utils/codes');
 const { recomputeMemberStats } = require('../src/services/stats');
 
 // Deterministic pseudo-random generator so every seed run looks the same.
@@ -235,14 +236,17 @@ async function main() {
     await db.query('UPDATE services SET total_headcount = $1 WHERE id = $2', [headcount, serviceIds[s]]);
   }
 
-  // ---------- member door codes ----------
-  // Demo members need codes too (retry loop guards against collisions).
-  for (let i = 0; i < 5; i += 1) {
-    const filled = await db.query(
-      `UPDATE members SET member_code = upper(substr(md5('seed-' || id::text || random()::text), 1, 6))
-         WHERE member_code IS NULL`
-    );
-    if (!filled.rowCount) break;
+  // ---------- member PINs ----------
+  // Demo members need 4-digit PINs too: one row at a time so a random
+  // collision retries instead of aborting the whole statement.
+  const { rows: pinless } = await db.query(
+    `SELECT id FROM members
+      WHERE member_code IS NULL OR member_code !~ '^\\d{4}$'
+      ORDER BY id`
+  );
+  for (const { id } of pinless) {
+    const pin = await generateMemberCode(db);
+    await db.query('UPDATE members SET member_code = $1 WHERE id = $2', [pin, id]);
   }
 
   // ---------- recompute streaks / last attended ----------

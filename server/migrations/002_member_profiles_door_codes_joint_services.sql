@@ -10,8 +10,11 @@
 --  Every statement is idempotent, so re-running is safe too.
 -- =====================================================================
 
--- ------------------- Member profile columns + door codes ------------
+-- ------------------- Member profile columns + member PINs ------------
 DO $$
+DECLARE
+  r        RECORD;
+  new_code TEXT;
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'members') THEN
     -- Profile fields added after some deployments were initialised.
@@ -23,16 +26,28 @@ BEGIN
     ALTER TABLE members ADD COLUMN IF NOT EXISTS profession      TEXT;
     ALTER TABLE members ADD COLUMN IF NOT EXISTS residence       TEXT;
 
-    -- Door codes ushers type at the door for quick marking.
+    -- Member PINs ushers type at the door for quick marking: four digits,
+    -- numbers only. Any legacy alphanumeric codes are replaced.
     ALTER TABLE members ADD COLUMN IF NOT EXISTS member_code TEXT;
     CREATE UNIQUE INDEX IF NOT EXISTS members_member_code_idx
       ON members (member_code) WHERE member_code IS NOT NULL;
 
-    -- Give every existing member a code. Deterministic + unique by
-    -- construction (id suffix), so it never collides or duplicates.
-    UPDATE members
-       SET member_code = upper(substr(md5('cat-member-' || id::text), 1, 6)) || '-' || id::text
-     WHERE member_code IS NULL;
+    -- Give every member without a valid 4-digit PIN a fresh one, one row
+    -- at a time so a random collision retries instead of aborting.
+    FOR r IN SELECT id FROM members
+              WHERE member_code IS NULL OR member_code !~ '^\d{4}$'
+              ORDER BY id
+    LOOP
+      LOOP
+        new_code := lpad(floor(random() * 10000)::int::text, 4, '0');
+        BEGIN
+          UPDATE members SET member_code = new_code WHERE id = r.id;
+          EXIT;
+        EXCEPTION WHEN unique_violation THEN
+          -- PIN already taken; draw again.
+        END;
+      END LOOP;
+    END LOOP;
   END IF;
 END $$;
 

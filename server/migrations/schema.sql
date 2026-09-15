@@ -331,14 +331,33 @@ UPDATE users SET role = 'district_admin' WHERE role IN ('admin', 'district_admin
 ALTER TABLE users ADD CONSTRAINT users_role_check
   CHECK (role IN ('district_admin', 'branch_admin', 'usher'));
 
--- ======================= MEMBER DOOR CODES =======================
--- Short codes ushers can type at the door to mark a member present.
+-- ======================= MEMBER PINS =======================
+-- Four-digit numeric PINs ushers type at the door to mark a member present.
 ALTER TABLE members ADD COLUMN IF NOT EXISTS member_code TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS members_member_code_idx ON members(member_code) WHERE member_code IS NOT NULL;
--- Backfill codes for members created before this change. Deterministic +
--- unique by construction (id suffix), so re-running never collides.
-UPDATE members SET member_code = upper(substr(md5('cat-member-' || id::text), 1, 6)) || '-' || id::text
-WHERE member_code IS NULL;
+-- Backfill PINs for members created before this change, and replace any
+-- legacy alphanumeric codes. One row at a time so a random collision
+-- retries instead of aborting the whole statement.
+DO $$
+DECLARE
+  r        RECORD;
+  new_code TEXT;
+BEGIN
+  FOR r IN SELECT id FROM members
+            WHERE member_code IS NULL OR member_code !~ '^\d{4}$'
+            ORDER BY id
+  LOOP
+    LOOP
+      new_code := lpad(floor(random() * 10000)::int::text, 4, '0');
+      BEGIN
+        UPDATE members SET member_code = new_code WHERE id = r.id;
+        EXIT;
+      EXCEPTION WHEN unique_violation THEN
+        -- PIN already taken; draw again.
+      END;
+    END LOOP;
+  END LOOP;
+END $$;
 
 -- Joint (all-branches) services: ushers of EVERY branch can mark attendance.
 ALTER TABLE services ADD COLUMN IF NOT EXISTS all_branches BOOLEAN NOT NULL DEFAULT FALSE;

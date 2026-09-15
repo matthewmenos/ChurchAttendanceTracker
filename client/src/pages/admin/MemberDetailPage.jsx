@@ -68,7 +68,7 @@ export default function MemberDetailPage() {
     setCodeBusy(true);
     try {
       await api(`/members/${id}/regenerate-code`, { method: 'POST' });
-      toast('A new door code was generated. The old one no longer works.');
+      toast('A new PIN was generated. The old one no longer works.');
       await detail.reload();
     } catch (err) {
       toast(err.message || 'Could not generate a new code.');
@@ -106,18 +106,18 @@ export default function MemberDetailPage() {
         <div className='member-hero-actions'>
           {member.member_code && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end', marginRight: 8 }}>
-              <span className='muted small'>Door code</span>
-              <code style={{ fontSize: '1.05rem', fontWeight: 700, letterSpacing: 2 }}>{member.member_code}</code>
+              <span className='muted small'>Member PIN</span>
+              <code style={{ fontSize: '1.05rem', fontWeight: 700, letterSpacing: 4 }}>{member.member_code}</code>
               <span style={{ display: 'flex', gap: 6 }}>
                 <button
                   type='button'
                   className='btn btn-ghost btn-sm'
-                  onClick={() => navigator.clipboard.writeText(member.member_code).then(() => toast('Code copied.'))}
+                  onClick={() => navigator.clipboard.writeText(member.member_code).then(() => toast('PIN copied.'))}
                 >
                   Copy
                 </button>
                 <button type='button' className='btn btn-ghost btn-sm' disabled={codeBusy} onClick={regenerateCode}>
-                  New code
+                  New PIN
                 </button>
               </span>
             </div>

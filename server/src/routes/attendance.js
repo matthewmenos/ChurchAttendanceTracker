@@ -315,8 +315,12 @@ router.put('/:id', authenticate, asyncHandler(async (req, res) => {
  */
 router.post('/code', authenticate, asyncHandler(async (req, res) => {
   const serviceId = vInt(req.body, 'serviceId', { required: true, label: 'Service' });
-  const rawCode = vStr(req.body, 'code', { required: true, max: 20, label: 'Member code' });
-  const code = String(rawCode).trim().toUpperCase();
+  const code = String(vStr(req.body, 'code', { required: true, max: 4, label: 'PIN' }) || '').trim();
+  if (!/^\d{4}$/.test(code)) {
+    throw new ApiError(400, 'Enter the 4-digit member PIN.', [
+      { field: 'code', message: 'Must be exactly 4 digits.' },
+    ]);
+  }
   const status = vEnum(req.body, 'status', ['present', 'absent', 'excused']) || 'present';
   const notes = vStr(req.body, 'notes', { max: 500 });
 
@@ -326,7 +330,7 @@ router.post('/code', authenticate, asyncHandler(async (req, res) => {
   if (isMarkingClosed(service)) throw new ApiError(403, closedMessage(service));
 
   const { rows: memberRows } = await db.query(
-    'SELECT id, status, branch_id, full_name FROM members WHERE upper(member_code) = $1',
+    'SELECT id, status, branch_id, full_name FROM members WHERE member_code = $1',
     [code]
   );
   const member = memberRows[0];
