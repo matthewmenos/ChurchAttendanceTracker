@@ -5,6 +5,7 @@ import { api } from '../api/client.js';
 import { Alert } from '../components/ui/feedback.jsx';
 import { Button, Field, Input, PasswordInput } from '../components/ui/forms.jsx';
 import Logo from '../components/ui/Logo.jsx';
+import { homePathFor } from '../auth/guards.jsx';
 
 export default function LoginPage() {
   const { user, initializing, login } = useAuth();
@@ -16,7 +17,6 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [churchName, setChurchName] = useState('');
   const CHURCH_NAME = import.meta.env.VITE_CHURCH_NAME || 'Church Attendance Tracker';
-  const DISTRICT_ADMIN_ROLE = 'district_admin';
 
   useEffect(() => {
     document.title = `Sign in — ${CHURCH_NAME}`;
@@ -30,7 +30,7 @@ export default function LoginPage() {
   }, []);
 
   if (!initializing && user) {
-    return <Navigate to={user.role === DISTRICT_ADMIN_ROLE ? '/admin' : '/usher'} replace />;
+    return <Navigate to={homePathFor(user.role)} replace />;
   }
 
   const submit = async (e) => {
@@ -44,7 +44,7 @@ export default function LoginPage() {
     try {
       const loggedIn = await login(email.trim(), password);
       const dest = location.state && location.state.from;
-      navigate(dest || (loggedIn.role === DISTRICT_ADMIN_ROLE ? '/admin' : '/usher'), { replace: true });
+      navigate(dest || homePathFor(loggedIn.role), { replace: true });
     } catch (err) {
       setError(err.message || 'Sign-in failed.');
     } finally {

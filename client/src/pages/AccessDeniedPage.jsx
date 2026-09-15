@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { homePathFor } from '../auth/guards.jsx';
 import { IconLock } from '../components/ui/icons.jsx';
 
 export default function AccessDeniedPage() {
@@ -15,7 +16,7 @@ export default function AccessDeniedPage() {
         </p>
         <div className='message-actions'>
           {user ? (
-            <Link className='btn btn-primary' to={user.role === 'usher' ? '/usher' : '/admin'}>
+            <Link className='btn btn-primary' to={homePathFor(user.role)}>
               Go to my home page
             </Link>
           ) : (

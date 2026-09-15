@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import useFetch from '../../hooks/useFetch.js';
 import { api } from '../../api/client.js';
 import { useToast } from '../../context/ToastContext.jsx';
+import { useAuth } from '../../auth/AuthContext.jsx';
 import { Badge, PageHeader, Tabs } from '../../components/ui/display.jsx';
 import { Alert, EmptyState, ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
 import { Button, Checkbox, Field, Input, Select, Textarea } from '../../components/ui/forms.jsx';
@@ -562,7 +563,11 @@ function ResourceTab({ labelSingular, listQ, deleteConfirmText }) {
 }
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState('general');
+  const { user } = useAuth();
+  // Church-wide configuration (birthday SMS, notification dispatch) belongs to the
+  // district admin; branch admins only manage branch-level settings.
+  const isDistrict = !!user && user.role === 'district_admin';
+  const [tab, setTab] = useState(isDistrict ? 'general' : 'permissions');
   const settingsQ = useFetch(() => api('/settings'), []);
   const groupsQ = useFetch(() => api('/groups'), []);
   groupsQ.endpoint = '/groups';
@@ -577,7 +582,7 @@ export default function SettingsPage() {
   if (settingsQ.error) return <div className='container'><ErrorState error={settingsQ.error} onRetry={settingsQ.reload} /></div>;
 
   const s = (settingsQ.data && settingsQ.data.settings) || {};
-    const generalInitial = { church_name: s.church_name || '' };
+  const generalInitial = { church_name: s.church_name || '' };
   const permsInitial = {
     usher_can_correct_attendance: s.usher_can_correct_attendance === 'true',
     usher_correction_window_minutes: Number(s.usher_correction_window_minutes || 30),
@@ -587,7 +592,7 @@ export default function SettingsPage() {
     birthday_messages_enabled: s.birthday_messages_enabled !== 'false',
     birthday_message_template: s.birthday_message_template || '',
   };
-    const followupInitial = {
+  const followupInitial = {
     followup_absent_threshold:
       s.followup_absent_threshold !== undefined ? Number(s.followup_absent_threshold) : 3,
   };
@@ -600,10 +605,14 @@ export default function SettingsPage() {
         active={tab}
         onChange={setTab}
         tabs={[
-          { key: 'general', label: 'General' },
+          ...(isDistrict ? [{ key: 'general', label: 'General' }] : []),
           { key: 'permissions', label: 'Usher permissions' },
-          { key: 'birthdays', label: 'Birthdays' },
-          { key: 'notifications', label: 'SMS notifications' },
+          ...(isDistrict
+            ? [
+                { key: 'birthdays', label: 'Birthdays' },
+                { key: 'notifications', label: 'SMS notifications' },
+              ]
+            : []),
           { key: 'followups', label: 'Follow-ups' },
           { key: 'groups', label: 'Groups' },
           { key: 'locations', label: 'Locations' },
@@ -626,7 +635,7 @@ export default function SettingsPage() {
         />
       )}
 
-      {tab === 'birthdays' && (
+      {tab === 'birthdays' && isDistrict && (
         <>
           <SettingsForm
             initial={birthdayInitial}
@@ -640,7 +649,7 @@ export default function SettingsPage() {
         </>
       )}
 
-      {tab === 'notifications' && (
+      {tab === 'notifications' && isDistrict && (
         <NotificationsTab enabledInitial={s.notifications_enabled !== 'false'} />
       )}
 

@@ -2,13 +2,16 @@ const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vEnum } = require('../utils/validate');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireDistrictAdmin } = require('../middleware/auth');
 const { getSettingsMap } = require('../services/settings');
 const { isArkaselConfigured } = require('../services/sms');
 const { getAudience, sendAnnouncement, listHistory } = require('../services/notifications');
 
 const router = express.Router();
-router.use(authenticate, requireAdmin);
+// SMS announcements and reminders are church-wide: only the district admin may
+// compose them or read the delivery history. Branch admins manage branch-level
+// data only.
+router.use(authenticate, requireDistrictAdmin);
 
 /** Recipient preview + provider status for the composer. */
 router.get('/audience', asyncHandler(async (req, res) => {

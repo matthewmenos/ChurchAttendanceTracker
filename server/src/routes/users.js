@@ -157,18 +157,41 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const email = vEmail(req.body, 'email', { required: true });
   const phone = vStr(req.body, 'phone', { max: 40 });
   const branchId = vInt(req.body, 'branchId');
+  const requestedRole = vEnum(req.body, 'role', ['district_admin', 'branch_admin', 'usher']);
 
-  // Validate branch change
-  if (branchId !== undefined && branchId !== existing.branch_id) {
-    if (existing.role === 'district_admin') {
-      throw new ApiError(400, 'District admin cannot be assigned to a branch.');
+  // vInt/vEnum return null both when a field is absent and when it is explicitly
+  // empty, so presence must be checked on the raw body. Without this, saving a
+  // user would blank fields the caller never sent.
+  const has = (field) => !!req.body && Object.prototype.hasOwnProperty.call(req.body, field);
+  const branchProvided = has('branchId');
+  const roleProvided = has('role');
+
+  // Re-assigning a role re-scopes everything the account can reach, so it stays a
+  // district-admin-only action (and never on your own account).
+  let role = existing.role;
+  if (roleProvided && requestedRole && requestedRole !== existing.role) {
+    if (req.user.role !== 'district_admin') {
+      throw new ApiError(403, 'Only a district admin can change a user role.');
     }
-    if (branchId) {
-      const branchCheck = await db.query(`SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [branchId]);
-      if (!branchCheck.rows.length) throw new ApiError(400, 'Invalid or inactive branch.');
+    if (id === req.user.id) {
+      throw new ApiError(400, 'You cannot change your own role.');
     }
+    role = requestedRole;
+  }
+
+  // The branch that applies once this request is saved.
+  const nextBranchId = branchProvided ? branchId : existing.branch_id;
+  if (role === 'district_admin') {
+    if (nextBranchId) throw new ApiError(400, 'District admin cannot be assigned to a branch.');
+  } else if (!nextBranchId) {
+    throw new ApiError(400, 'Branch admin and usher must be assigned to a branch.');
+  }
+
+  if (nextBranchId !== existing.branch_id) {
+    const branchCheck = await db.query(`SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [nextBranchId]);
+    if (!branchCheck.rows.length) throw new ApiError(400, 'Invalid or inactive branch.');
     // Branch admin can only assign to their own branch
-    if (req.user.role === 'branch_admin' && branchId !== req.user.branch_id) {
+    if (req.user.role === 'branch_admin' && nextBranchId !== req.user.branch_id) {
       throw new ApiError(403, 'You can only assign users to your own branch.');
     }
   }
@@ -177,8 +200,8 @@ router.put('/:id', asyncHandler(async (req, res) => {
   if (dup.rows.length) throw new ApiError(409, 'Another account already uses this email.');
 
   await db.query(
-    'UPDATE users SET name = $1, email = $2, phone = $3, branch_id = $4 WHERE id = $5',
-    [name, email, phone, branchId !== undefined ? branchId : existing.branch_id, id]
+    'UPDATE users SET name = $1, email = $2, phone = $3, branch_id = $4, role = $5 WHERE id = $6',
+    [name, email, phone, nextBranchId || null, role, id]
   );
   res.json({ user: cleanUser(await findUser(id)) });
 }));

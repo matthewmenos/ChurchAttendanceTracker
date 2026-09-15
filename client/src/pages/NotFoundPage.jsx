@@ -1,14 +1,11 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { homePathFor } from '../auth/guards.jsx';
 import { IconCompass } from '../components/ui/icons.jsx';
 
 export default function NotFoundPage() {
   const { user } = useAuth();
-  const homePath = !user
-    ? '/login'
-    : user.role === 'usher'
-      ? '/usher'
-      : '/admin';
+  const homePath = user ? homePathFor(user.role) : '/login';
 
   return (
     <div className='page-center'>

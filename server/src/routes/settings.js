@@ -24,6 +24,26 @@ router.get('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
 router.put('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const updates = [];
 
+  // Church-wide settings (identity, branding and the SMS automations) belong to the
+  // district admin alone; a branch admin manages branch-level policy only.
+  const DISTRICT_ONLY_KEYS = [
+    'church_name',
+    'logo',
+    'birthday_messages_enabled',
+    'birthday_message_template',
+    'notifications_enabled',
+    'visitor_thanks_enabled',
+    'visitor_thanks_template',
+  ];
+  if (req.user.role !== 'district_admin') {
+    const blocked = DISTRICT_ONLY_KEYS.filter((key) =>
+      Object.prototype.hasOwnProperty.call(req.body || {}, key)
+    );
+    if (blocked.length) {
+      throw new ApiError(403, 'Only the main admin can change church-wide settings.');
+    }
+  }
+
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'church_name')) {
     updates.push(['church_name', vStr(req.body, 'church_name', { required: true, min: 2, max: 80, label: 'Church name' })]);
   }

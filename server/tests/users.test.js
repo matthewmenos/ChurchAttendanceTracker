@@ -127,16 +127,16 @@ describe('User management (admin only)', () => {
 describe('Usernames', () => {
   test('admin can set a username; duplicates (case-insensitive) are rejected', async () => {
     await resetTables();
-    await seedBase();
+    const base = await seedBase();
     const admin = await loginAs('admin@test.app');
     const ok = await admin
       .post('/api/users')
-      .send({ name: 'U Two', email: 'u2@test.app', role: 'usher', username: 'usher2' });
+      .send({ name: 'U Two', email: 'u2@test.app', role: 'usher', username: 'usher2', branchId: base.branchId });
     expect(ok.status).toBe(201);
     expect(ok.body.user.username).toBe('usher2');
     const dup = await admin
       .post('/api/users')
-      .send({ name: 'U Three', email: 'u3@test.app', role: 'usher', username: 'USHER2' });
+      .send({ name: 'U Three', email: 'u3@test.app', role: 'usher', username: 'USHER2', branchId: base.branchId });
     expect(dup.status).toBe(409);
   });
 });

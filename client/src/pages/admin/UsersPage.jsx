@@ -34,6 +34,9 @@ export default function UsersPage() {
   const [editing, setEditing] = useState(null);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  // A district admin may re-scope any account but their own; a branch admin may
+  // only manage ushers inside their own branch.
+  const canEditRole = isDistrict && !!editing && me.id !== editing.id;
 
   const [tempPassword, setTempPassword] = useState(null); // { name, password }
   const [resetTarget, setResetTarget] = useState(null);
@@ -64,13 +67,19 @@ export default function UsersPage() {
   const saveUser = async (e) => {
     e.preventDefault();
     const form = new FormData(e.target);
+    const roleValue = form.get('role');
+    const branchValue = form.get('branchId');
     const payload = {
       name: form.get('name'),
       email: form.get('email'),
       username: form.get('username'),
       phone: form.get('phone'),
-      role: editing ? undefined : form.get('role'),
-      branchId: !editing && isDistrict && form.get('branchId') ? Number(form.get('branchId')) : undefined,
+      // Re-scoping an existing account is a district-admin action; a branch admin
+      // only ever edits ushers inside their own branch, so those keys are omitted.
+      role: editing ? (canEditRole ? roleValue : undefined) : roleValue,
+      branchId: editing
+        ? (canEditRole ? (branchValue ? Number(branchValue) : null) : undefined)
+        : (isDistrict && branchValue ? Number(branchValue) : undefined),
     };
     setSaving(true);
     setFormError('');
@@ -165,6 +174,11 @@ export default function UsersPage() {
                   </Badge>
                 ),
               },
+              {
+                key: 'branch_name',
+                label: 'Branch',
+                render: (u) => (u.branch_name ? u.branch_name : <span className='muted'>—</span>),
+              },
               { key: 'status', label: 'Status', render: (u) => <Badge variant={u.status}>{u.status === 'active' ? 'Active' : 'Inactive'}</Badge> },
               { key: 'must_change_password', label: 'Credentials', render: (u) => (u.must_change_password ? <Badge variant='warning'>Temp password</Badge> : <Badge variant='ok'>Set</Badge>) },
               { key: 'last_login_at', label: 'Last login', render: (u) => (u.last_login_at ? timeAgo(u.last_login_at) : 'Never') },
@@ -218,7 +232,7 @@ export default function UsersPage() {
                   <option value='usher'>Usher — records attendance only</option>
                 </Select>
               </Field>
-              {isDistrict && (
+              {isDistrict ? (
                 <Field label='Branch' id='u-branch' hint='Required for ushers and branch admins; district admins are not branch-bound.'>
                   <Select id='u-branch' name='branchId' defaultValue=''>
                     <option value=''>No branch (district admin only)</option>
@@ -227,7 +241,30 @@ export default function UsersPage() {
                     ))}
                   </Select>
                 </Field>
+              ) : (
+                <Field label='Branch' id='u-branch' hint='New accounts are added to your own branch.'>
+                  <Input id='u-branch' value={me.branch_name || 'Your branch'} readOnly disabled />
+                </Field>
               )}
+            </>
+          )}
+          {canEditRole && (
+            <>
+              <Field label='Role' id='u-role' required hint='Changing the role re-scopes everything this account can reach.'>
+                <Select id='u-role' name='role' defaultValue={editing.role}>
+                  <option value='district_admin'>District admin — full access</option>
+                  <option value='branch_admin'>Branch admin — manages one branch</option>
+                  <option value='usher'>Usher — records attendance only</option>
+                </Select>
+              </Field>
+              <Field label='Branch' id='u-branch' hint='Required unless the role is district admin.'>
+                <Select id='u-branch' name='branchId' defaultValue={editing.branch_id || ''}>
+                  <option value=''>No branch (district admin only)</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </Select>
+              </Field>
             </>
           )}
           <div className='modal-actions'>
