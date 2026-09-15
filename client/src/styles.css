@@ -174,7 +174,7 @@ select.input { appearance: auto; }
 
 /* ---------------- print (per-service report) ---------------- */
 @media print {
-  .sidebar, .topbar, .no-print, .backdrop { display: none !important; }
+  .sidebar, .topbar, .no-print, .backdrop, .bottom-nav { display: none !important; }
   .admin-shell, .admin-main-wrap { display: block !important; }
   .admin-main { padding: 0 !important; }
   .container.wide { max-width: none; }
@@ -507,10 +507,23 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
 .member-hero-main { flex: 1; min-width: 220px; }
 .member-notes { background: var(--yellow-50); border: 1px solid var(--yellow-100); border-radius: 8px; padding: 8px 12px; font-size: .9rem; }
 .member-hero-actions { display: grid; gap: 8px; }
-/* ---------------- usher nav ---------------- */
-.usher-nav { background: #fff; padding: 0 18px; margin-bottom: 6px; overflow-x: auto; scrollbar-width: none; }
-.usher-nav::-webkit-scrollbar { display: none; }
-.usher-nav a { text-decoration: none; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+/* ---------------- usher bottom navigation ---------------- */
+.bottom-nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  background: #fff; border-top: 1px solid var(--line);
+  padding: 6px 8px calc(7px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -4px 14px rgba(15, 23, 42, .06);
+}
+.bottom-nav-item {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  padding: 6px 4px; border-radius: 10px;
+  color: var(--ink-600); font-size: .72rem; font-weight: 600;
+  text-decoration: none; border-top: 3px solid transparent; margin-top: -9px;
+}
+.bottom-nav-item:hover { background: #f4f6fb; color: var(--blue-700); text-decoration: none; }
+.bottom-nav-item.active { color: var(--blue-700); border-top-color: var(--yellow-500); }
+.usher-main { padding-bottom: 92px; }
 
 /* ---------------- responsive ---------------- */
 @media (max-width: 1024px) {
@@ -522,10 +535,16 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
 @media (max-width: 900px) {
   .sidebar {
     position: fixed; left: 0; top: 0; bottom: 0; height: 100%;
+    width: min(280px, 88vw); /* never cover the whole screen on phones */
     transform: translateX(-105%); transition: transform .2s ease; box-shadow: var(--shadow-md);
+    overflow-y: auto;
   }
   .sidebar.open { transform: translateX(0); }
   .nav-toggle { display: inline-block; }
+  /* topbar: title shrinks, controls stay reachable */
+  .topbar { gap: 8px; padding: 10px 12px; }
+  .topbar-title { flex: 1 1 auto; min-width: 0; }
+  .admin-main { padding-inline: 14px; }
 }
 
 @media (max-width: 860px) {
@@ -572,12 +591,9 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
 @media (max-width: 480px) {
   .stat-grid, .stat-grid-4, .stat-grid-3 { grid-template-columns: 1fr; }
   .mark-audit { display: none; }
-  /* usher topbar: reclaim space on small phones */
-  .usher-name { display: none; }
-  .usher-user { gap: 6px; }
-  .usher-topbar { padding: 10px 12px; }
-  .usher-topbar .btn-outline-light { padding: 4px 9px; font-size: .78rem; }
-  .usher-brand > span:last-child { max-width: 34vw; }
+  /* usher topbar is brand-only now; keep the church name readable on small phones */
+  .usher-topbar { padding: 10px 12px; justify-content: center; }
+  .usher-brand > span:last-child { max-width: 60vw; font-size: .95rem; }
   /* modals become bottom sheets — !important overrides any inline width prop */
   .modal-backdrop { padding: 0; align-items: flex-end; }
   .modal {

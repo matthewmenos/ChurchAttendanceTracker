@@ -1,22 +1,19 @@
-import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { Avatar } from '../ui/display.jsx';
 import { Alert } from '../ui/feedback.jsx';
-import ChangePasswordModal from '../ChangePasswordModal.jsx';
-import InstallPrompt from '../InstallPrompt.jsx';
 import Logo from '../ui/Logo.jsx';
-import { IconKey, IconCalendar, IconUsers, IconClipboardCheck } from '../ui/icons.jsx';
+import { IconCalendar, IconUsers, IconClipboardCheck, IconSettings } from '../ui/icons.jsx';
+
+const TABS = [
+  { to: '/usher', label: 'Home', icon: IconCalendar, end: true },
+  { to: '/usher/visitors', label: 'Visitors', icon: IconUsers },
+  { to: '/usher/marks', label: 'My marks', icon: IconClipboardCheck },
+  { to: '/usher/account', label: 'Account', icon: IconSettings },
+];
 
 export default function UsherLayout() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [pwOpen, setPwOpen] = useState(false);
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
 
   return (
     <div className='usher-shell'>
@@ -25,33 +22,14 @@ export default function UsherLayout() {
           <Logo />
           <span>{(user && user.churchName) || 'Attendance'}</span>
         </div>
-        <div className='usher-user'>
-          <InstallPrompt />
-          <button type='button' className='icon-btn' onClick={() => setPwOpen(true)} aria-label='Change password' title='Change password'>
-            <IconKey size={18} />
-          </button>
-          <Avatar name={user ? user.name : ''} />
-          <span className='usher-name'>{user ? user.name.split(' ')[0] : ''}</span>
-          <button type='button' className='btn btn-outline-light btn-sm' onClick={handleLogout}>Sign out</button>
-        </div>
       </header>
-
-      <nav className='tabs usher-nav' aria-label='Usher sections'>
-        <NavLink end to='/usher' className={({ isActive }) => 'tab' + (isActive ? ' active' : '')}>
-          <IconCalendar size={16} /> Home
-        </NavLink>
-        <NavLink to='/usher/visitors' className={({ isActive }) => 'tab' + (isActive ? ' active' : '')}>
-          <IconUsers size={16} /> Visitors
-        </NavLink>
-        <NavLink to='/usher/marks' className={({ isActive }) => 'tab' + (isActive ? ' active' : '')}>
-          <IconClipboardCheck size={16} /> My marks
-        </NavLink>
-      </nav>
 
       {(user && user.must_change_password) && (
         <div className='container usher-banner'>
           <Alert variant='warning' title='You are using a temporary password.'>
-            <button type='button' className='link-btn' onClick={() => setPwOpen(true)}>Set your own password now</button>
+            <button type='button' className='link-btn' onClick={() => navigate('/usher/account')}>
+              Set your own password now
+            </button>
           </Alert>
         </div>
       )}
@@ -60,7 +38,19 @@ export default function UsherLayout() {
         <Outlet />
       </main>
 
-      <ChangePasswordModal open={pwOpen} onClose={() => setPwOpen(false)} />
+      <nav className='bottom-nav' aria-label='Usher sections'>
+        {TABS.map((t) => (
+          <NavLink
+            key={t.to}
+            to={t.to}
+            end={t.end}
+            className={({ isActive }) => 'bottom-nav-item' + (isActive ? ' active' : '')}
+          >
+            <t.icon size={21} aria-hidden='true' />
+            <span>{t.label}</span>
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }

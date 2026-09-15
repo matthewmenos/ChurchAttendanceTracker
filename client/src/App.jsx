@@ -21,6 +21,7 @@ import UsherHomePage from './pages/usher/UsherHomePage.jsx';
 import UsherMarkPage from './pages/usher/UsherMarkPage.jsx';
 import UsherVisitorsPage from './pages/usher/UsherVisitorsPage.jsx';
 import UsherMarksPage from './pages/usher/UsherMarksPage.jsx';
+import UsherAccountPage from './pages/usher/UsherAccountPage.jsx';
 
 export default function App() {
   return (
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="mark/:serviceId" element={<UsherMarkPage />} />
             <Route path="visitors" element={<UsherVisitorsPage />} />
             <Route path="marks" element={<UsherMarksPage />} />
+<Route path="account" element={<UsherAccountPage />} />
           </Route>
         </Route>
       </Route>
