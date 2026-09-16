@@ -386,7 +386,14 @@ table.table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 .admin-main { flex: 1; }
 
 /* ---------------- usher layout ---------------- */
-.usher-shell { min-height: 100vh; display: flex; flex-direction: column; }
+.usher-shell {
+  min-height: 100vh; display: flex; flex-direction: column;
+  /* Single source of truth for the fixed bottom nav's height. The nav, the
+     save bar and the main padding all derive from this, so the taller "+" tab
+     can never make the nav overlap the save bar. 64px fits the tallest item
+     (3px indicator + 6 pad + 30px "+" circle + 3 gap + label + 6 pad). */
+  --bottom-nav-h: 64px;
+}
 .usher-topbar {
   position: sticky; top: 0; z-index: 90;
   background: linear-gradient(90deg, var(--blue-900), var(--blue-800));
@@ -417,7 +424,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: .92rem; }
   padding: 6px 14px; border-radius: 999px; cursor: pointer;
 }
 .chip.active { background: var(--blue-700); border-color: var(--blue-700); color: #fff; }
-.mark-list { list-style: none; margin: 0 0 90px; padding: 0; display: grid; gap: 6px; }
+.mark-list { list-style: none; margin: 0 0 170px; padding: 0; display: grid; gap: 6px; }
 .mark-row {
   display: flex; align-items: center; gap: 10px; padding: 6px 12px;
   border-left-width: 4px; transition: border-color .12s, box-shadow .12s;
@@ -459,6 +466,14 @@ table.table { width: 100%; border-collapse: collapse; font-size: .92rem; }
   box-shadow: 0 -4px 16px rgba(15,23,42,.06);
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 20px; flex-wrap: wrap;
+}
+/* Inside the usher shell the fixed bottom nav sits at the bottom edge, so lift
+   the save bar above it by the nav's own height (+ safe-area inset). Using the
+   variable keeps the two in lockstep whatever the nav contains. z-index is
+   raised above the nav (100) so the save bar can never be painted over. */
+.usher-shell .save-bar {
+  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+  z-index: 101;
 }
 .save-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .save-info .alert { margin-bottom: 0; }
@@ -523,44 +538,46 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
 /* ---------------- usher bottom navigation ---------------- */
 .bottom-nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  /* Height is pinned to the same variable the save bar and main padding use,
+     so the taller "+" tab can never grow the nav and overlap the save bar. */
+  height: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
   background: #fff; border-top: 1px solid var(--line);
-  padding: 6px 8px calc(7px + env(safe-area-inset-bottom, 0px));
+  padding: 0 8px env(safe-area-inset-bottom, 0px);
   box-shadow: 0 -4px 14px rgba(15, 23, 42, .06);
 }
 .bottom-nav-item {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  min-width: 0; padding: 6px 4px; border-radius: 10px;
-  color: var(--ink-600); font-size: .72rem; font-weight: 600;
-  text-decoration: none; border-top: 3px solid transparent; margin-top: -9px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-width: 0; height: 100%; padding: 4px; border-radius: 10px;
+  color: var(--ink-600); font-size: .7rem; font-weight: 600; line-height: 1.1;
+  text-decoration: none; border-top: 3px solid transparent;
   overflow: hidden;
 }
 .bottom-nav-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .bottom-nav-item:hover { background: #f4f6fb; color: var(--blue-700); text-decoration: none; }
 .bottom-nav-item.active { color: var(--blue-700); border-top-color: var(--yellow-500); }
 
-/* Raised circular "+" action in the middle of the bottom nav. */
+/* Center "+" action in the bottom nav — same line as the other tabs. */
 .bottom-nav-add { justify-content: center; }
 .bottom-nav-add-circle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  margin-top: -22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: var(--blue-600, #1d4ed8);
   color: #fff;
-  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.4);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  flex-shrink: 0;
 }
 .bottom-nav-add:hover .bottom-nav-add-circle,
 .bottom-nav-add.active .bottom-nav-add-circle {
-  transform: scale(1.06);
-  box-shadow: 0 6px 16px rgba(29, 78, 216, 0.5);
+  background: var(--blue-700, #1e40af);
 }
-.bottom-nav-add.active { color: var(--blue-700); border-top-color: transparent; }
-.usher-main { padding-bottom: 92px; }
+.bottom-nav-add.active { color: var(--blue-700); border-top-color: var(--yellow-500); }
+/* Keep page content clear of the fixed bottom nav. */
+.usher-main { padding-bottom: calc(var(--bottom-nav-h) + 28px); }
 
 /* ---------------- responsive ---------------- */
 @media (max-width: 1024px) {
