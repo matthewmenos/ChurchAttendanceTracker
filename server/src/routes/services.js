@@ -14,10 +14,12 @@ const LIST_SELECT = `
          s.all_branches,
          s.attendance_closed, s.attendance_closed_at, cb.name AS attendance_closed_by_name,
          s.attendance_close_time,
+         s.visitor_headcount,
          COALESCE(a.present, 0)::int AS present,
          COALESCE(a.absent, 0)::int  AS absent,
          COALESCE(a.excused, 0)::int AS excused,
-         COALESCE(a.marked, 0)::int  AS marked
+         COALESCE(a.marked, 0)::int  AS marked,
+         (COALESCE(a.present, 0) + COALESCE(s.visitor_headcount, 0))::int AS total_present
     FROM services s
     LEFT JOIN locations l ON l.id = s.location_id
     LEFT JOIN branches b ON b.id = s.branch_id
@@ -53,8 +55,12 @@ function withFlags(row) {
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const schedulePassed = !!row.attendance_close_time
     && new Date(row.attendance_close_time).getTime() <= Date.now();
+  const visitorHeadcount = Number(row.visitor_headcount) || 0;
+  const presentMembers = Number(row.present) || 0;
   return {
     ...row,
+    visitor_headcount: visitorHeadcount,
+    total_present: presentMembers + visitorHeadcount,
     all_branches: !!row.all_branches,
     upcoming: String(row.service_date) >= todayStr,
     marking_closed: !!row.attendance_closed || schedulePassed,
@@ -78,6 +84,36 @@ function readAllBranches(user, body) {
     throw new ApiError(403, 'Only the main admin can create an all-branches service.');
   }
   return true;
+}
+
+/**
+ * Visitor headcount is a manual count of walk-in visitors entered by an
+ * admin/usher; total headcount = members marked present + visitors.
+ * Total headcount itself stays read-only: it always mirrors the computed
+ * number of members marked present plus the visitor count, so nobody can
+ * type (or sneak in) a stale value.
+ * Rejects any client-supplied totalHeadcount instead of ignoring it, so a
+ * cached old form fails loudly instead of pretending its number was saved.
+ */
+/** Validate the manual visitor headcount (optional, >= 0). */
+function readVisitorHeadcount(body) {
+  const raw = body ? body.visitorHeadcount : undefined;
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new ApiError(400, 'Visitor headcount must be a whole number of 0 or more.', [
+      { field: 'visitorHeadcount', message: 'Enter 0 or more.' },
+    ]);
+  }
+  return n;
+}
+
+function rejectClientHeadcount(body) {
+  if (body && body.totalHeadcount !== undefined && body.totalHeadcount !== null && String(body.totalHeadcount).trim() !== '') {
+    throw new ApiError(400, 'Total headcount is computed automatically from attendance and cannot be set manually.', [
+      { field: 'totalHeadcount', message: 'Read-only: shows members marked present.' },
+    ]);
+  }
 }
 
 /** Validate an optional 'YYYY-MM-DDTHH:MM[:SS]' close time from the client. */
@@ -141,32 +177,41 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const serviceName = vStr(req.body, 'serviceName', { required: true, max: 120, label: 'Service name' });
   const startTime = vTime(req.body, 'startTime', { label: 'Start time' });
   const locationId = await checkLocation(vInt(req.body, 'locationId'));
-  const headcount = vInt(req.body, 'totalHeadcount', { min: 0, label: 'Total headcount' }) || 0;
+  rejectClientHeadcount(req.body);
+  const visitorHeadcount = readVisitorHeadcount(req.body) || 0;
   const notes = vStr(req.body, 'notes', { max: 500 });
   const closeTime = readCloseTime(req.body);
   const allBranches = readAllBranches(req.user, req.body);
 
-  // Determine branch_id — every service belongs to exactly one branch.
-  let branchId = req.user.branch_id;
-  if (req.user.role === 'district_admin' && req.body.branchId) {
-    branchId = Number(req.body.branchId);
+  // Joint services (all branches gather) belong to no specific branch.
+  // Regular services belong to the creator's branch, or the branch a
+  // district admin explicitly picks.
+  let branchId = req.user.role === 'district_admin' ? null : req.user.branch_id;
+  if (!allBranches) {
+    if (req.user.role === 'district_admin' && req.body.branchId) {
+      branchId = Number(req.body.branchId);
+    }
+    if (!branchId) {
+      throw new ApiError(400, 'Every service belongs to a branch. Pick a branch, or tick the all-branches box for a joint service.', [
+        { field: 'branchId', message: 'Branch is required.' },
+      ]);
+    }
   }
-  if (!branchId) {
-    throw new ApiError(400, 'Cannot create service: no branch assigned.');
-  }
-  const { rows: branchRows } = await db.query(
-    `SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [branchId]);
-  if (!branchRows.length) {
-    throw new ApiError(400, 'Invalid or inactive branch.', [
-      { field: 'branchId', message: 'Unknown branch.' },
-    ]);
+  if (branchId) {
+    const { rows: branchRows } = await db.query(
+      `SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [branchId]);
+    if (!branchRows.length) {
+      throw new ApiError(400, 'Invalid or inactive branch.', [
+        { field: 'branchId', message: 'Unknown branch.' },
+      ]);
+    }
   }
 
   const { rows } = await db.query(
-    `INSERT INTO services (service_date, service_name, start_time, location_id, total_headcount, notes, created_by, attendance_close_time, branch_id, all_branches)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `INSERT INTO services (service_date, service_name, start_time, location_id, total_headcount, visitor_headcount, notes, created_by, attendance_close_time, branch_id, all_branches)
+     VALUES ($1, $2, $3, $4, 0, $5, $6, $7, $8, $9, $10)
      RETURNING id`,
-    [serviceDate, serviceName, startTime, locationId, headcount, notes, req.user.id, closeTime, branchId, allBranches]
+    [serviceDate, serviceName, startTime, locationId, visitorHeadcount, notes, req.user.id, closeTime, branchId, allBranches]
   );
   res.status(201).json({ service: withFlags(await serviceById(rows[0].id)) });
 }));
@@ -218,34 +263,52 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
   const serviceName = vStr(req.body, 'serviceName', { required: true, max: 120, label: 'Service name' });
   const startTime = vTime(req.body, 'startTime', { label: 'Start time' });
   const locationId = await checkLocation(vInt(req.body, 'locationId'));
-  const headcount = vInt(req.body, 'totalHeadcount', { min: 0, label: 'Total headcount' }) || 0;
+  rejectClientHeadcount(req.body);
+  const visitorHeadcount = readVisitorHeadcount(req.body);
   const notes = vStr(req.body, 'notes', { max: 500 });
   const closeTime = readCloseTime(req.body);
   const allBranches = readAllBranches(req.user, req.body) || (existing.all_branches && req.body.allBranches === undefined);
 
-  // District admins may move a service to another branch.
+  // Joint services belong to no specific branch; toggling a service to
+  // joint clears its branch, toggling back requires picking one.
+  // District admins may also move a regular service to another branch
+  // (branchId omitted = keep current; empty/null = clear to joint-ready).
   let branchId = existing.branch_id;
   if (req.user.role === 'district_admin' && req.body.branchId !== undefined) {
-    const next = vInt(req.body, 'branchId');
-    if (next) {
-      const { rows: branchRows } = await db.query(
-        `SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [next]);
-      if (!branchRows.length) {
-        throw new ApiError(400, 'Invalid or inactive branch.', [
-          { field: 'branchId', message: 'Unknown branch.' },
-        ]);
+    const raw = req.body.branchId;
+    if (raw === null || raw === '') {
+      branchId = null;
+    } else {
+      const next = vInt(req.body, 'branchId');
+      if (next) {
+        const { rows: branchRows } = await db.query(
+          `SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [next]);
+        if (!branchRows.length) {
+          throw new ApiError(400, 'Invalid or inactive branch.', [
+            { field: 'branchId', message: 'Unknown branch.' },
+          ]);
+        }
+        branchId = next;
       }
-      branchId = next;
     }
+  }
+  if (allBranches) {
+    branchId = null;
+  } else if (!branchId) {
+    throw new ApiError(400, 'Every service belongs to a branch. Pick a branch, or tick the all-branches box for a joint service.', [
+      { field: 'branchId', message: 'Branch is required.' },
+    ]);
   }
 
   await db.query(
     `UPDATE services
         SET service_date = $1, service_name = $2, start_time = $3,
-            location_id = $4, total_headcount = $5, notes = $6, attendance_close_time = $7,
-            branch_id = $8, all_branches = $9
+            location_id = $4, notes = $5, attendance_close_time = $6,
+            branch_id = $7, all_branches = $8,
+            visitor_headcount = COALESCE($9, visitor_headcount)
       WHERE id = $10`,
-    [serviceDate, serviceName, startTime, locationId, headcount, notes, closeTime, branchId, allBranches, id]
+    [serviceDate, serviceName, startTime, locationId, notes, closeTime, branchId, allBranches,
+     visitorHeadcount === undefined ? null : visitorHeadcount, id]
   );
   res.json({ service: withFlags(await serviceById(id)) });
 }));

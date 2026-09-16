@@ -6,6 +6,58 @@ const { authenticate, requireAdmin, getBranchFilter, assertBranchAccess, require
 const { generateMemberCode } = require('../utils/codes');
 
 const router = express.Router();
+
+/**
+ * Quick member add, used by the usher screen's "+" tab.
+ * Ushers may only use this when their branch admin has switched on
+ * "allow ushers to add members" for their branch; the new member always
+ * joins the usher's own branch. Admins may use it too.
+ * NOTE: registered before the admin-only router.use below on purpose.
+ */
+router.post('/quick-add', authenticate, asyncHandler(async (req, res) => {
+  const isAdmin = ['district_admin', 'branch_admin'].includes(req.user.role);
+  if (!isAdmin) {
+    if (!req.user.branch_id) {
+      throw new ApiError(403, 'Your account is not assigned to a branch, so you cannot add members.');
+    }
+    const { rows } = await db.query(
+      `SELECT allow_usher_add_member FROM branches WHERE id = $1 AND status = 'active'`,
+      [req.user.branch_id]
+    );
+    if (!rows[0] || !rows[0].allow_usher_add_member) {
+      throw new ApiError(403, 'Your branch admin has not enabled member sign-up for ushers.');
+    }
+  }
+
+  const fullName = vStr(req.body, 'fullName', { required: true, max: 120, label: 'Full name' });
+  const phone = vStr(req.body, 'phone', { max: 40 });
+  const gender = vEnum(req.body, 'gender', ['male', 'female'], { label: 'Gender' });
+  const notes = vStr(req.body, 'notes', { max: 500 });
+
+  // Ushers always add to their own branch; admins may pick one.
+  let branchId = req.user.branch_id;
+  if (req.user.role === 'district_admin' && req.body.branchId) {
+    branchId = Number(req.body.branchId);
+  }
+  if (!branchId) {
+    throw new ApiError(400, 'Cannot add member: no branch assigned. Please contact your administrator.');
+  }
+
+  try {
+    const memberCode = await generateMemberCode(db);
+    const { rows } = await db.query(
+      `INSERT INTO members (full_name, phone, gender, status, notes, branch_id, member_code)
+       VALUES ($1, $2, $3, 'active', $4, $5, $6)
+       RETURNING id`,
+      [fullName, phone || null, gender || null, notes || null, branchId, memberCode]
+    );
+    res.status(201).json({ member: cleanMember(await findMember(rows[0].id)) });
+  } catch (e) {
+    if (e.code === '23505') throw new ApiError(409, 'A member with this email already exists.');
+    throw e;
+  }
+}));
+
 // All member management is admin-only, enforced on the server.
 router.use(authenticate, requireAdmin);
 

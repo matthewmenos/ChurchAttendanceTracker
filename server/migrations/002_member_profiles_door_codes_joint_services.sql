@@ -58,5 +58,9 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'services') THEN
     ALTER TABLE services ADD COLUMN IF NOT EXISTS all_branches BOOLEAN NOT NULL DEFAULT FALSE;
+    -- Manual count of walk-in visitors per service. Total headcount shown in
+    -- the UI = members marked present + this number.
+    ALTER TABLE services ADD COLUMN IF NOT EXISTS visitor_headcount INTEGER NOT NULL DEFAULT 0
+      CHECK (visitor_headcount >= 0);
   END IF;
 END $$;

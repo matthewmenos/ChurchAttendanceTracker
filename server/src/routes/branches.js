@@ -2,7 +2,7 @@ const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vEmail } = require('../utils/validate');
-const { authenticate, requireDistrictAdmin, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireDistrictAdmin, requireAdmin, assertBranchAccess } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -18,6 +18,7 @@ function cleanBranch(b) {
     contact_phone: b.contact_phone,
     contact_email: b.contact_email,
     status: b.status,
+    allow_usher_add_member: !!b.allow_usher_add_member,
     member_count: Number(b.member_count || 0),
     user_count: Number(b.user_count || 0),
     created_at: b.created_at,
@@ -109,6 +110,23 @@ router.put('/:id', requireDistrictAdmin, asyncHandler(async (req, res) => {
     [name, description || null, location || null, contactPhone || null, contactEmail || null, id]
   );
   res.json({ branch: cleanBranch(rows[0]) });
+}));
+
+// PATCH /api/branches/:id/allow-usher-add
+// Per-branch switch: may ushers of this branch add members?
+// The branch's own admin decides; district admin may also set it.
+router.patch('/:id/allow-usher-add', requireAdmin, asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (req.user.role !== 'district_admin') {
+    assertBranchAccess(req.user, id);
+  }
+  const enabled = !!req.body && ['1', 'true'].includes(String(req.body.enabled).toLowerCase());
+  const { rows } = await db.query(
+    `UPDATE branches SET allow_usher_add_member = $1 WHERE id = $2 AND status = 'active' RETURNING id, allow_usher_add_member`,
+    [enabled, id]
+  );
+  if (!rows[0]) throw new ApiError(404, 'Branch not found.');
+  res.json({ branch: { id: rows[0].id, allow_usher_add_member: !!rows[0].allow_usher_add_member } });
 }));
 
 // DELETE /api/branches/:id - deactivate branch (district admin only)

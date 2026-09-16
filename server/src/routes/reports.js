@@ -184,12 +184,13 @@ router.get('/summary', asyncHandler(async (req, res) => {
 
   const bsB = branchWhere([from, to], 's');
   const { rows: byService } = await db.query({ text: `
-    SELECT s.id, s.service_date, s.service_name, s.total_headcount, l.name AS location_name,
+    SELECT s.id, s.service_date, s.service_name, s.total_headcount, s.visitor_headcount, l.name AS location_name,
             COALESCE(a.present, 0)::int AS present,
             COALESCE(a.absent, 0)::int  AS absent,
             COALESCE(a.excused, 0)::int AS excused,
             COALESCE(a.present_male, 0)::int   AS present_male,
-            COALESCE(a.present_female, 0)::int AS present_female
+            COALESCE(a.present_female, 0)::int AS present_female,
+            (COALESCE(a.present, 0) + COALESCE(s.visitor_headcount, 0))::int AS total_present
        FROM services s
        LEFT JOIN locations l ON l.id = s.location_id ${SERVICE_COUNTS_JOIN}
       WHERE s.service_date BETWEEN $1 AND $2${bsB.sql}

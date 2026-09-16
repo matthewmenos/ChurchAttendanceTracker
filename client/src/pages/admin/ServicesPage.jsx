@@ -35,6 +35,9 @@ export default function ServicesPage() {
   const [editing, setEditing] = useState(null);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  // Joint checkbox state drives the branch field: a joint service belongs to
+  // no branch, so the branch picker is disabled while it is ticked.
+  const [jointChecked, setJointChecked] = useState(false);
 
   useEffect(() => {
     document.title = 'Services — Church Attendance Tracker';
@@ -47,12 +50,14 @@ export default function ServicesPage() {
 
   const openCreate = () => {
     setEditing(null);
+    setJointChecked(false);
     setFormError('');
     setFormOpen(true);
   };
 
   const openEdit = (service) => {
     setEditing(service);
+    setJointChecked(!!(service && service.all_branches));
     setFormError('');
     setFormOpen(true);
   };
@@ -65,11 +70,14 @@ export default function ServicesPage() {
       serviceName: form.get('serviceName'),
       startTime: form.get('startTime'),
       locationId: form.get('locationId') ? Number(form.get('locationId')) : null,
-      totalHeadcount: form.get('totalHeadcount') === '' ? 0 : Number(form.get('totalHeadcount')),
       attendanceCloseTime: form.get('attendanceCloseTime') || null,
       notes: form.get('notes'),
-      branchId: isDistrict && form.get('branchId') ? Number(form.get('branchId')) : undefined,
-      allBranches: isDistrict && form.get('allBranches') ? true : undefined,
+      // Joint services belong to no branch — the server clears branch_id;
+      // regular district-admin services carry the picked branch.
+      branchId: isDistrict ? (jointChecked ? null : (form.get('branchId') ? Number(form.get('branchId')) : undefined)) : undefined,
+      allBranches: isDistrict ? jointChecked : undefined,
+      // Manual walk-in visitor count; total present = members present + this.
+      visitorHeadcount: form.get('visitorHeadcount') === '' ? 0 : Number(form.get('visitorHeadcount')) || 0,
     };
     setSaving(true);
     setFormError('');
@@ -94,7 +102,7 @@ export default function ServicesPage() {
     <div className='container wide'>
       <PageHeader
         title='Services'
-        subtitle='Plan services and keep the headcount up to date.'
+        subtitle='Total present counts members marked present plus walk-in visitors and updates automatically.'
         actions={<Button onClick={openCreate}>+ New service</Button>}
       />
 
@@ -126,8 +134,8 @@ export default function ServicesPage() {
               { key: 'service_name', label: 'Service', render: (r) => (<span><Link to={`/admin/services/${r.id}`} className='row-title'>{r.service_name}</Link>{r.all_branches ? <span> <Badge variant='info'>All branches</Badge></span> : null}</span>) },
               { key: 'start_time', label: 'Time', render: (r) => (r.start_time ? formatTime(r.start_time) : '—') },
               { key: 'location_name', label: 'Location', render: (r) => r.location_name || '—' },
-              { key: 'total_headcount', label: 'Headcount', className: 'num' },
-              { key: 'present', label: 'Attendance', render: (r) => (<span><Badge variant={r.marked > 0 ? 'info' : 'neutral'}>{r.present} marked</Badge>{r.marking_closed ? <Badge variant='high'>Closed</Badge> : null}</span>) },
+              { key: 'total_present', label: 'Total present', className: 'num', render: (r) => String(r.total_present ?? r.present ?? 0) },
+              { key: 'marked', label: 'Attendance', render: (r) => (<span><Badge variant={r.marked > 0 ? 'info' : 'neutral'}>{r.present} marked</Badge>{r.marking_closed ? <Badge variant='high'>Closed</Badge> : null}</span>) },
               {
                 key: 'actions',
                 label: 'Actions',
@@ -178,13 +186,14 @@ export default function ServicesPage() {
             <Field
               label='Branch'
               id='sv-branch'
-              required={!editing}
-              hint={editing ? 'You can move this service to another branch.' : 'Every service belongs to a branch.'}
+              required={!jointChecked && !editing}
+              hint={jointChecked ? 'Joint services belong to no branch — the picker is disabled.' : (editing ? 'You can move this service to another branch.' : 'Every service belongs to a branch.')}
             >
               <Select
                 id='sv-branch'
                 name='branchId'
-                required={!editing}
+                required={!jointChecked && !editing}
+                disabled={jointChecked}
                 defaultValue={editing && editing.branch_id ? String(editing.branch_id) : (currentBranchId ? String(currentBranchId) : '')}
               >
                 <option value=''>Choose a branch…</option>
@@ -198,10 +207,16 @@ export default function ServicesPage() {
             <Field
               label='Joint service'
               id='sv-all-branches'
-              hint='Tick when all branches gather (e.g. combined service). Ushers of every branch can then record attendance, and the roster includes every branch’s members.'
+              hint='Tick when all branches gather (e.g. combined service). The service then belongs to no branch — ushers of every branch can record attendance, and the roster includes every branch’s members.'
             >
               <label className='checkbox' style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input id='sv-all-branches' name='allBranches' type='checkbox' defaultChecked={!!(editing && editing.all_branches)} />
+                <input
+                  id='sv-all-branches'
+                  name='allBranches'
+                  type='checkbox'
+                  checked={jointChecked}
+                  onChange={(e) => setJointChecked(e.target.checked)}
+                />
                 <span>All branches gather for this service</span>
               </label>
             </Field>
@@ -214,8 +229,31 @@ export default function ServicesPage() {
               ))}
             </Select>
           </Field>
-          <Field label='Total headcount' id='sv-headcount' hint='Everyone present, including visitors.'>
-            <Input id='sv-headcount' name='totalHeadcount' type='number' min={0} defaultValue={editing ? editing.total_headcount : 0} />
+          <Field label='Total headcount' id='sv-headcount' hint='Read-only: members marked present plus walk-in visitors. It updates automatically.'>
+            <Input
+              id='sv-headcount'
+              name='totalHeadcount'
+              type='number'
+              min={0}
+              value={String(
+                editing
+                  ? (editing.total_present ?? ((editing.present ?? 0) + (editing.visitor_headcount ?? 0)))
+                  : 0
+              )}
+              readOnly
+              disabled
+              aria-readonly='true'
+            />
+          </Field>
+          <Field label='Visitors (walk-in)' id='sv-visitors' hint='Count of walk-in visitors, added to the total headcount. Members are counted automatically from attendance.'>
+            <Input
+              id='sv-visitors'
+              name='visitorHeadcount'
+              type='number'
+              min={0}
+              step={1}
+              defaultValue={editing ? (editing.visitor_headcount ?? 0) : 0}
+            />
           </Field>
           <Field label='Notes' id='sv-notes'>
             <Textarea id='sv-notes' name='notes' rows={2} maxLength={500} defaultValue={editing ? editing.notes : ''} />

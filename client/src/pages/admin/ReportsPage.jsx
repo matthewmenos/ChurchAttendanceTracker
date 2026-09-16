@@ -134,7 +134,7 @@ export default function ReportsPage() {
               { key: 'present_female', label: 'Female', className: 'num', render: (r) => String(r.present_female ?? 0) },
               { key: 'absent', label: 'Absent', className: 'num' },
               { key: 'excused', label: 'Excused', className: 'num' },
-              { key: 'total_headcount', label: 'Headcount', className: 'num' },
+              { key: 'total_present', label: 'Total present', className: 'num', render: (r) => String(r.total_present ?? r.present ?? 0) },
             ]}
           />
         )}

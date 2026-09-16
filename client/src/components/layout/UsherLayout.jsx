@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { Alert } from '../ui/feedback.jsx';
 import Logo from '../ui/Logo.jsx';
-import { IconCalendar, IconUsers, IconClipboardCheck, IconSettings } from '../ui/icons.jsx';
+import { IconCalendar, IconUsers, IconClipboardCheck, IconSettings, IconPlus } from '../ui/icons.jsx';
 
 const TABS = [
   { to: '/usher', label: 'Home', icon: IconCalendar, end: true },
@@ -14,6 +14,24 @@ const TABS = [
 export default function UsherLayout() {
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  // When the branch admin allows ushers to add members, a "+" button sits in
+  // the middle of the bottom nav between Visitors and My marks.
+  const canAddMember = !!(user && user.branch_allows_member_add);
+  const leftTabs = TABS.slice(0, 2);
+  const rightTabs = TABS.slice(2);
+
+  const renderItem = (t) => (
+    <NavLink
+      key={t.to}
+      to={t.to}
+      end={t.end}
+      className={({ isActive }) => 'bottom-nav-item' + (isActive ? ' active' : '')}
+    >
+      <t.icon size={21} aria-hidden='true' />
+      <span>{t.label}</span>
+    </NavLink>
+  );
 
   return (
     <div className='usher-shell'>
@@ -39,17 +57,21 @@ export default function UsherLayout() {
       </main>
 
       <nav className='bottom-nav' aria-label='Usher sections'>
-        {TABS.map((t) => (
+        {leftTabs.map(renderItem)}
+        {canAddMember && (
           <NavLink
-            key={t.to}
-            to={t.to}
-            end={t.end}
-            className={({ isActive }) => 'bottom-nav-item' + (isActive ? ' active' : '')}
+            key='/usher/add-member'
+            to='/usher/add-member'
+            className={({ isActive }) => 'bottom-nav-item bottom-nav-add' + (isActive ? ' active' : '')}
+            aria-label='Add member'
           >
-            <t.icon size={21} aria-hidden='true' />
-            <span>{t.label}</span>
+            <span className='bottom-nav-add-circle' aria-hidden='true'>
+              <IconPlus size={24} />
+            </span>
+            <span>Add</span>
           </NavLink>
-        ))}
+        )}
+        {rightTabs.map(renderItem)}
       </nav>
     </div>
   );

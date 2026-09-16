@@ -538,6 +538,28 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
 .bottom-nav-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .bottom-nav-item:hover { background: #f4f6fb; color: var(--blue-700); text-decoration: none; }
 .bottom-nav-item.active { color: var(--blue-700); border-top-color: var(--yellow-500); }
+
+/* Raised circular "+" action in the middle of the bottom nav. */
+.bottom-nav-add { justify-content: center; }
+.bottom-nav-add-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  border-radius: 50%;
+  background: var(--blue-600, #1d4ed8);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.bottom-nav-add:hover .bottom-nav-add-circle,
+.bottom-nav-add.active .bottom-nav-add-circle {
+  transform: scale(1.06);
+  box-shadow: 0 6px 16px rgba(29, 78, 216, 0.5);
+}
+.bottom-nav-add.active { color: var(--blue-700); border-top-color: transparent; }
 .usher-main { padding-bottom: 92px; }
 
 /* ---------------- responsive ---------------- */

@@ -57,7 +57,7 @@ function clearAuthCookies(res) {
 async function loadPublicUser(id) {
   const { rows } = await db.query(
     `SELECT u.id, u.name, u.email, u.username, u.role, u.status, u.must_change_password, u.last_login_at,
-            u.branch_id, b.name AS branch_name,
+            u.branch_id, b.name AS branch_name, COALESCE(b.allow_usher_add_member, FALSE) AS branch_allows_member_add,
             (SELECT value FROM settings WHERE key = 'church_name') AS church_name,
             (SELECT value FROM settings WHERE key = 'logo') AS logo
        FROM users u
@@ -78,6 +78,7 @@ async function loadPublicUser(id) {
     last_login_at: u.last_login_at,
     branch_id: u.branch_id,
     branch_name: u.branch_name || null,
+    branch_allows_member_add: !!u.branch_allows_member_add,
     churchName: u.church_name || 'Church Attendance Tracker',
     logo: u.logo || '',
   };

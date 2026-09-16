@@ -138,6 +138,35 @@ export default function MembersPage() {
   const items = (listQ.data && listQ.data.items) || [];
   const total = (listQ.data && listQ.data.total) || 0;
 
+  // Branch admins control whether their ushers may add members.
+  const isBranchAdmin = !!user && user.role === 'branch_admin';
+  const branchQ = useFetch(() => api('/branches'), []);
+  const myBranch = (branchQ.data && branchQ.data.items && branchQ.data.items[0]) || null;
+  const [allowUsherAdd, setAllowUsherAdd] = useState(null);
+  const [togglingAllow, setTogglingAllow] = useState(false);
+  useEffect(() => {
+    if (myBranch) setAllowUsherAdd(!!myBranch.allow_usher_add_member);
+  }, [myBranch && myBranch.id, myBranch && myBranch.allow_usher_add_member]);
+
+  const toggleAllowUsherAdd = async () => {
+    if (!myBranch || allowUsherAdd === null) return;
+    setTogglingAllow(true);
+    try {
+      const res = await api(`/branches/${myBranch.id}/allow-usher-add`, {
+        method: 'PATCH',
+        body: { enabled: !allowUsherAdd },
+      });
+      setAllowUsherAdd(!!(res.branch && res.branch.allow_usher_add_member));
+      toast(res.branch && res.branch.allow_usher_add_member
+        ? 'Ushers can now add members.'
+        : 'Ushers can no longer add members.');
+    } catch (err) {
+      toast(err.message || 'Could not change the setting.');
+    } finally {
+      setTogglingAllow(false);
+    }
+  };
+
   const openCreate = () => {
     setEditing(null);
     setBirthday('');
@@ -260,6 +289,29 @@ export default function MembersPage() {
           </button>
         ) : null}
       </div>
+
+      {isBranchAdmin && (
+        <section className='card pad' aria-label='Usher permissions' style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <h2 className='card-title' style={{ marginBottom: 2 }}>Allow ushers to add members</h2>
+              <p className='muted small' style={{ margin: 0 }}>
+                When on, your ushers see a "+" button on their screen to sign up new members for {myBranch ? myBranch.name : 'your branch'}.
+              </p>
+            </div>
+            <label className='checkbox' style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+              <input
+                type='checkbox'
+                role='switch'
+                checked={!!allowUsherAdd}
+                disabled={togglingAllow || allowUsherAdd === null}
+                onChange={toggleAllowUsherAdd}
+              />
+              <span>{allowUsherAdd ? 'On' : 'Off'}</span>
+            </label>
+          </div>
+        </section>
+      )}
 
       {listQ.loading && <LoadingBlock label='Loading members…' />}
       {listQ.error && <ErrorState error={listQ.error} onRetry={listQ.reload} />}

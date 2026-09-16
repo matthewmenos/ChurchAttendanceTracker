@@ -84,7 +84,7 @@ export default function ServiceDetailPage() {
         <StatCard tone='green' label='Present' value={String(totals.present)} sub={`${totals.present_male || 0} male · ${totals.present_female || 0} female`} />
         <StatCard tone='red' label='Absent' value={String(totals.absent)} sub={`${totals.absent_male || 0} male · ${totals.absent_female || 0} female`} />
         <StatCard tone='blue' label='Excused' value={String(totals.excused)} sub={`${totals.excused_male || 0} male · ${totals.excused_female || 0} female`} />
-        <StatCard tone='yellow' label='Reported headcount' value={String(service.total_headcount ?? 0)} sub={`${totals.marked} members marked`} />
+        <StatCard tone='yellow' label='Total headcount' value={String(totals.present + (service.visitor_headcount || 0))} sub={`${totals.present} members · ${service.visitor_headcount || 0} visitors`} />
       </section>
 
       <section className='card' aria-label='Member attendance for this service'>

@@ -368,9 +368,11 @@ router.get('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const where = [];
   const params = [];
   // Branch admins only see records for their own branch's services.
+  // Joint (branch-less) services are visible to every admin; scoping is by
+  // service branch, not by which member was marked.
   if (req.user.role !== 'district_admin') {
     params.push(req.user.branch_id || -1);
-    where.push(`s.branch_id = $${params.length}`);
+    where.push(`(s.branch_id = $${params.length} OR s.all_branches = TRUE)`);
   }
   if (serviceId) { params.push(serviceId); where.push(`a.service_id = $${params.length}`); }
   if (memberId) { params.push(memberId); where.push(`a.member_id = $${params.length}`); }

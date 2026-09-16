@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS branches (
   contact_phone TEXT,
   contact_email TEXT,
   status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+  allow_usher_add_member BOOLEAN NOT NULL DEFAULT FALSE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -121,6 +122,7 @@ CREATE TABLE IF NOT EXISTS services (
   attendance_close_time   TIMESTAMPTZ,
   branch_id               INTEGER REFERENCES branches(id) ON DELETE SET NULL,
   all_branches            BOOLEAN NOT NULL DEFAULT FALSE,
+  visitor_headcount       INTEGER NOT NULL DEFAULT 0 CHECK (visitor_headcount >= 0),
   created_by              INTEGER REFERENCES users(id),
   created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -361,6 +363,15 @@ END $$;
 
 -- Joint (all-branches) services: ushers of EVERY branch can mark attendance.
 ALTER TABLE services ADD COLUMN IF NOT EXISTS all_branches BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Per-branch switch (controlled by the branch admin): when TRUE, ushers of
+-- that branch may add new members from their own screen.
+ALTER TABLE branches ADD COLUMN IF NOT EXISTS allow_usher_add_member BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Manual count of walk-in visitors per service. Total headcount shown in the
+-- UI = members marked present + this number.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS visitor_headcount INTEGER NOT NULL DEFAULT 0
+  CHECK (visitor_headcount >= 0);
 
 -- Re-point orphaned rows at the default branch.
 UPDATE users         SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;
