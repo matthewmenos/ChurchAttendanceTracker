@@ -30,9 +30,18 @@ router.post('/quick-add', authenticate, asyncHandler(async (req, res) => {
   }
 
   const fullName = vStr(req.body, 'fullName', { required: true, max: 120, label: 'Full name' });
+  const email = vEmail(req.body, 'email');
   const phone = vStr(req.body, 'phone', { max: 40 });
+  const birthday = vDate(req.body, 'birthday');
   const gender = vEnum(req.body, 'gender', ['male', 'female'], { label: 'Gender' });
-  const notes = vStr(req.body, 'notes', { max: 500 });
+  const membershipType = vEnum(req.body, 'membershipType', ['new_convert', 'existing'], { label: 'Membership type' });
+  const maritalStatus = vEnum(req.body, 'maritalStatus', ['single', 'married', 'divorced', 'widowed'], { label: 'Marital status' });
+  const profession = vStr(req.body, 'profession', { max: 200 });
+  const residence = vStr(req.body, 'residence', { max: 200 });
+  const groupIds = await ensureGroups(readGroupIds(req.body));
+  const status = vEnum(req.body, 'status', ['active', 'inactive']) || 'active';
+  const notes = vStr(req.body, 'notes', { max: 1000 });
+  const age = ageFromBirthday(birthday);
 
   // Ushers always add to their own branch; admins may pick one.
   let branchId = req.user.branch_id;
@@ -46,11 +55,12 @@ router.post('/quick-add', authenticate, asyncHandler(async (req, res) => {
   try {
     const memberCode = await generateMemberCode(db);
     const { rows } = await db.query(
-      `INSERT INTO members (full_name, phone, gender, status, notes, branch_id, member_code)
-       VALUES ($1, $2, $3, 'active', $4, $5, $6)
+      `INSERT INTO members (full_name, email, phone, birthday, age, gender, membership_type, marital_status, profession, residence, status, notes, branch_id, member_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING id`,
-      [fullName, phone || null, gender || null, notes || null, branchId, memberCode]
+      [fullName, email, phone || null, birthday, age, gender, membershipType, maritalStatus, profession, residence, status, notes || null, branchId, memberCode]
     );
+    await setMemberGroups(rows[0].id, groupIds);
     res.status(201).json({ member: cleanMember(await findMember(rows[0].id)) });
   } catch (e) {
     if (e.code === '23505') throw new ApiError(409, 'A member with this email already exists.');

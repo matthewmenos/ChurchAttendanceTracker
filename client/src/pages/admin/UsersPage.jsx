@@ -139,7 +139,7 @@ export default function UsersPage() {
       <PageHeader
         title='User management'
         subtitle='Create usher accounts, issue credentials and manage access.'
-        actions={<Button onClick={openCreate}>+ New usher</Button>}
+        actions={<Button onClick={openCreate}>+ New User</Button>}
       />
 
       <Alert variant='info'>
