@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useFetch from '../../hooks/useFetch.js';
-import { api } from '../../api/client.js';
+import { api, apiBlob } from '../../api/client.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
 import { PageHeader, StatCard } from '../../components/ui/display.jsx';
 import { ErrorState, LoadingBlock } from '../../components/ui/feedback.jsx';
 import { Button, Field, Select } from '../../components/ui/forms.jsx';
@@ -10,6 +11,7 @@ import { Table } from '../../components/ui/Table.jsx';
 import { BarList, TrendChart } from '../../components/charts/Charts.jsx';
 import { IconCircleCheck, IconChevronRight } from '../../components/ui/icons.jsx';
 import { downloadCsv } from '../../utils/csv.js';
+import { downloadBlob } from '../../utils/download.js';
 import { formatShortDate } from '../../utils/format.js';
 
 const RANGES = {
@@ -29,7 +31,9 @@ function rangeDates(key) {
 }
 
 export default function ReportsPage() {
+  const toast = useToast();
   const [rangeKey, setRangeKey] = useState('90');
+  const [exporting, setExporting] = useState(false);
   const { from, to } = rangeDates(rangeKey);
 
   useEffect(() => {
@@ -81,6 +85,20 @@ export default function ReportsPage() {
     );
   };
 
+  /** Excel workbook: a charted summary dashboard plus one sheet per table. */
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const blob = await apiBlob('/reports/export', { params: { from, to, branchId: currentBranchId || undefined } });
+      downloadBlob(`attendance-report-${from || 'all'}-to-${to || 'now'}.xlsx`, blob);
+      toast('Excel workbook downloaded.');
+    } catch (e) {
+      toast(e.message || 'Could not build the Excel file.', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className='container wide'>
       <PageHeader
@@ -89,7 +107,8 @@ export default function ReportsPage() {
         actions={
           <>
             <Button variant='secondary' size='sm' onClick={exportMembers}>Export members CSV</Button>
-            <Button size='sm' onClick={exportAttendance}>Export attendance CSV</Button>
+            <Button variant='secondary' size='sm' onClick={exportAttendance}>Export attendance CSV</Button>
+            <Button size='sm' loading={exporting} onClick={exportExcel}>Download Excel</Button>
           </>
         }
       />

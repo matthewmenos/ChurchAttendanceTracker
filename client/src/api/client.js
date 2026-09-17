@@ -24,15 +24,8 @@ function buildUrl(path, params) {
   return url;
 }
 
-/** Fetch wrapper: JSON bodies, cookies, one silent refresh + retry on 401. */
-export async function api(path, { method = 'GET', body, params } = {}) {
-  const url = buildUrl(path, params);
-  const opts = { method, credentials: 'include', headers: {} };
-  if (body !== undefined) {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(body);
-  }
-
+/** Fetch with cookies, retrying once through the silent refresh on a 401. */
+async function fetchWithAuth(url, opts, path) {
   let res = await fetch(url, opts);
 
   if (res.status === 401 && !path.startsWith('/auth/')) {
@@ -52,6 +45,33 @@ export async function api(path, { method = 'GET', body, params } = {}) {
       refreshingPromise = null;
     }
   }
+  return res;
+}
+
+/** Reads the API error payload, tolerating non-JSON (e.g. file) responses. */
+async function readError(res) {
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (e) {
+    data = null;
+  }
+  return {
+    message: (data && data.message) || res.statusText || 'Request failed',
+    errors: data ? data.errors : undefined,
+  };
+}
+
+/** Fetch wrapper: JSON bodies, cookies, one silent refresh + retry on 401. */
+export async function api(path, { method = 'GET', body, params } = {}) {
+  const url = buildUrl(path, params);
+  const opts = { method, credentials: 'include', headers: {} };
+  if (body !== undefined) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+
+  const res = await fetchWithAuth(url, opts, path);
 
   let data = null;
   try {
@@ -67,4 +87,14 @@ export async function api(path, { method = 'GET', body, params } = {}) {
     throw new ApiError(res.status, (data && data.message) || res.statusText || 'Request failed', data ? data.errors : undefined);
   }
   return data;
+}
+
+/** Fetches a binary response (e.g. the Excel export) and returns it as a Blob. */
+export async function apiBlob(path, { params } = {}) {
+  const res = await fetchWithAuth(buildUrl(path, params), { method: 'GET', credentials: 'include' }, path);
+  if (!res.ok) {
+    const { message, errors } = await readError(res);
+    throw new ApiError(res.status, message, errors);
+  }
+  return res.blob();
 }

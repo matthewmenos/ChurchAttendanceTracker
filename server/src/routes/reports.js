@@ -1,53 +1,29 @@
 const express = require('express');
 const db = require('../config/db');
 const { asyncHandler } = require('../utils/errors');
-const { vDate, vInt } = require('../utils/validate');
 const { authenticate, requireAdmin, requireDistrictAdmin } = require('../middleware/auth');
 
-/**
- * Branch scoping for report queries.
- * District admins see all branches (narrow with ?branchId=); every other
- * admin is hard-scoped to their own branch (-1 matches nothing).
- */
-function branchScope(req) {
-  if (req.user.role === 'district_admin') {
-    return req.query.branchId ? Number(req.query.branchId) : null;
-  }
-  return req.user.branch_id || -1;
-}
-
-/** Factory: returns a helper that appends a branch condition to a query. */
-function makeBranchWhere(scope) {
-  return (baseParams, alias) => {
-    const params = [...baseParams];
-    if (scope == null) return { params, sql: '' };
-    params.push(scope);
-    return { params, sql: ` AND ${alias}.branch_id = $${params.length}` };
-  };
-}
 const { getServiceTotals } = require('../services/stats');
+// Report SQL, branch scoping and the workbook builder live in services/ so the
+// JSON endpoints and the Excel export always describe the same numbers.
+const {
+  branchScope,
+  makeBranchWhere,
+  todayStr,
+  SERVICE_COUNTS_JOIN,
+  defaultRange,
+  getReportSummary,
+  getBranchReport,
+} = require('../services/reports');
+const { buildReportWorkbook } = require('../services/reportExport');
 
 const router = express.Router();
 router.use(authenticate, requireAdmin);
 
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** Report window from the query string, defaulting to the last 90 days. */
+function reportRange(req) {
+  return defaultRange(req.query);
 }
-
-const SERVICE_COUNTS_JOIN = `
-  LEFT JOIN (
-    SELECT a.service_id,
-           COUNT(*) FILTER (WHERE a.status = 'present') AS present,
-           COUNT(*) FILTER (WHERE a.status = 'absent')  AS absent,
-           COUNT(*) FILTER (WHERE a.status = 'excused') AS excused,
-           COUNT(*) AS marked,
-           COUNT(*) FILTER (WHERE a.status = 'present' AND m.gender = 'male')   AS present_male,
-           COUNT(*) FILTER (WHERE a.status = 'present' AND m.gender = 'female') AS present_female
-      FROM attendance a
-      JOIN members m ON m.id = a.member_id
-     GROUP BY a.service_id
-  ) a ON a.service_id = s.id`;
 
 /** Everything the admin Overview page needs in one round-trip. */
 router.get('/dashboard', asyncHandler(async (req, res) => {
@@ -174,132 +150,10 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
   });
 }));
 
-/** Aggregated report data over a date range. */
+/** Aggregated report data over a date range (shared with the Excel export). */
 router.get('/summary', asyncHandler(async (req, res) => {
-  const to = vDate(req.query, 'to') || todayStr();
-  const defaultFrom = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const from = vDate(req.query, 'from') || defaultFrom;
-  const scope = branchScope(req);
-  const branchWhere = makeBranchWhere(scope);
-
-  const bsB = branchWhere([from, to], 's');
-  const { rows: byService } = await db.query({ text: `
-    SELECT s.id, s.service_date, s.service_name, s.total_headcount, s.visitor_headcount, l.name AS location_name,
-            COALESCE(a.present, 0)::int AS present,
-            COALESCE(a.absent, 0)::int  AS absent,
-            COALESCE(a.excused, 0)::int AS excused,
-            COALESCE(a.present_male, 0)::int   AS present_male,
-            COALESCE(a.present_female, 0)::int AS present_female,
-            (COALESCE(a.present, 0) + COALESCE(s.visitor_headcount, 0))::int AS total_present
-       FROM services s
-       LEFT JOIN locations l ON l.id = s.location_id ${SERVICE_COUNTS_JOIN}
-      WHERE s.service_date BETWEEN $1 AND $2${bsB.sql}
-      ORDER BY s.service_date ASC`, values: bsB.params });
-
-  const totals = byService.reduce(
-    (acc, r) => ({
-      present: acc.present + r.present,
-      absent: acc.absent + r.absent,
-      excused: acc.excused + r.excused,
-      present_male: acc.present_male + r.present_male,
-      present_female: acc.present_female + r.present_female,
-    }),
-    { present: 0, absent: 0, excused: 0, present_male: 0, present_female: 0 }
-  );
-
-  const rangeB = branchWhere([from, to], 'm');
-  const mBranch = rangeB.sql; // " AND m.branch_id = $n" (empty when unscoped)
-
-  const groupQuery = `
-    SELECT g.name,
-           COUNT(DISTINCT m.id) FILTER (WHERE m.status = 'active'${mBranch}) AS active_members,
-           COUNT(DISTINCT CASE WHEN a.status = 'present' AND s.id IS NOT NULL${mBranch} THEN m.id END) AS present_members,
-           COUNT(a.id) FILTER (WHERE a.status = 'present' AND s.id IS NOT NULL${mBranch}) AS present_count,
-           COUNT(a.id) FILTER (WHERE a.status = 'absent'  AND s.id IS NOT NULL${mBranch}) AS absent_count,
-           COUNT(a.id) FILTER (WHERE a.status = 'excused' AND s.id IS NOT NULL${mBranch}) AS excused_count
-      FROM member_groups g
-      LEFT JOIN member_group_assignments mga ON mga.group_id = g.id
-      LEFT JOIN members m ON m.id = mga.member_id
-      LEFT JOIN attendance a ON a.member_id = m.id
-      LEFT JOIN services s ON s.id = a.service_id AND s.service_date BETWEEN $1 AND $2
-     GROUP BY g.id, g.name`;
-
-  const noGroupQuery = `
-    SELECT '(No group)' AS name,
-           COUNT(DISTINCT m.id) FILTER (WHERE m.status = 'active'${mBranch}) AS active_members,
-           COUNT(DISTINCT CASE WHEN a.status = 'present' AND s.id IS NOT NULL${mBranch} THEN m.id END) AS present_members,
-           COUNT(a.id) FILTER (WHERE a.status = 'present' AND s.id IS NOT NULL${mBranch}) AS present_count,
-           COUNT(a.id) FILTER (WHERE a.status = 'absent'  AND s.id IS NOT NULL${mBranch}) AS absent_count,
-           COUNT(a.id) FILTER (WHERE a.status = 'excused' AND s.id IS NOT NULL${mBranch}) AS excused_count
-      FROM members m
-      LEFT JOIN attendance a ON a.member_id = m.id
-      LEFT JOIN services s ON s.id = a.service_id AND s.service_date BETWEEN $1 AND $2
-     WHERE TRUE${mBranch}
-       AND NOT EXISTS (SELECT 1 FROM member_group_assignments mga WHERE mga.member_id = m.id)`;
-
-  const { rows: g1 } = await db.query({ text: groupQuery, values: rangeB.params });
-  const { rows: g2 } = await db.query({ text: noGroupQuery, values: rangeB.params });
-  const byGroup = [...g1, ...g2]
-    .map((r) => ({
-      ...r,
-      active_members: Number(r.active_members),
-      present_members: Number(r.present_members),
-      present_count: Number(r.present_count),
-      absent_count: Number(r.absent_count),
-      excused_count: Number(r.excused_count),
-    }))
-    .sort((a, b) => b.active_members - a.active_members);
-
-  const raB = branchWhere([from, to], 'm');
-  const { rows: repeatAbsentees } = await db.query({ text: `
-     SELECT t.* FROM (
-        SELECT m.id, m.full_name, gg.group_name, m.consecutive_absences, m.last_attended,
-               (SELECT COUNT(*) FROM attendance a
-                  JOIN services s ON s.id = a.service_id
-                 WHERE a.member_id = m.id AND a.status = 'absent'
-                   AND s.service_date BETWEEN $1 AND $2) AS absences_in_range
-         FROM members m
-         LEFT JOIN LATERAL (
-              SELECT string_agg(g.name, ', ' ORDER BY g.name) AS group_name
-                FROM member_group_assignments mga JOIN member_groups g ON g.id = mga.group_id
-               WHERE mga.member_id = m.id
-         ) gg ON true
-        WHERE m.status = 'active'${raB.sql}
-     ) t
-      WHERE t.consecutive_absences >= 3 OR t.absences_in_range >= 4
-      ORDER BY t.consecutive_absences DESC, t.absences_in_range DESC
-      LIMIT 25`, values: raB.params });
-
-  const ubB = branchWhere([], 'u');
-  const { rows: byUsher } = await db.query(
-    `SELECT u.id, u.name,
-            COUNT(a.id) AS records,
-            COUNT(a.id) FILTER (WHERE a.status = 'present') AS present,
-            COUNT(a.id) FILTER (WHERE a.status = 'absent')  AS absent,
-            COUNT(a.id) FILTER (WHERE a.status = 'excused') AS excused
-       FROM users u
-       LEFT JOIN attendance a ON a.recorded_by_user_id = u.id
-      WHERE u.role = 'usher'${ubB.sql}
-      GROUP BY u.id, u.name
-      ORDER BY records DESC`,
-    ubB.params
-  );
-
-  res.json({
-    from,
-    to,
-    byService,
-    totals,
-    byGroup,
-    repeatAbsentees,
-    byUsher: byUsher.map((u) => ({
-      ...u,
-      records: Number(u.records),
-      present: Number(u.present),
-      absent: Number(u.absent),
-      excused: Number(u.excused),
-    })),
-  });
+  const { from, to } = reportRange(req);
+  res.json(await getReportSummary(db, { from, to, scope: branchScope(req) }));
 }));
 
 /**
@@ -307,64 +161,32 @@ router.get('/summary', asyncHandler(async (req, res) => {
  * Powers the "compare attendance across branches" view.
  */
 router.get('/branches', requireDistrictAdmin, asyncHandler(async (req, res) => {
-  const to = vDate(req.query, 'to') || todayStr();
-  const defaultFrom = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const from = vDate(req.query, 'from') || defaultFrom;
+  const { from, to } = reportRange(req);
+  res.json({ from, to, ...(await getBranchReport(db, { from, to })) });
+}));
 
-  const { rows } = await db.query(
-    `SELECT b.id, b.name, b.location,
-            (SELECT COUNT(*) FROM members m WHERE m.branch_id = b.id AND m.status = 'active') AS active_members,
-            (SELECT COUNT(*) FROM follow_ups f JOIN members m2 ON m2.id = f.member_id
-              WHERE f.status = 'open' AND m2.branch_id = b.id) AS open_follow_ups,
-            COUNT(DISTINCT s.id) AS services,
-            COALESCE(SUM(a.present), 0)::int AS present,
-            COALESCE(SUM(a.absent), 0)::int  AS absent,
-            COALESCE(SUM(a.excused), 0)::int AS excused
-       FROM branches b
-       LEFT JOIN services s ON s.branch_id = b.id AND s.service_date BETWEEN $1 AND $2
-       LEFT JOIN (
-         SELECT service_id,
-                COUNT(*) FILTER (WHERE status = 'present') AS present,
-                COUNT(*) FILTER (WHERE status = 'absent')  AS absent,
-                COUNT(*) FILTER (WHERE status = 'excused') AS excused
-           FROM attendance
-          GROUP BY service_id
-       ) a ON a.service_id = s.id
-      WHERE b.status = 'active'
-      GROUP BY b.id, b.name, b.location
-      ORDER BY b.name ASC`,
-    [from, to]
-  );
+/**
+ * Excel download of everything the Reports and Visitors screens show: a Summary
+ * dashboard with native Excel charts plus one sheet per table in the range.
+ * District admins also get the branch comparison sheet.
+ */
+router.get('/export', asyncHandler(async (req, res) => {
+  const { from, to } = reportRange(req);
 
-  const branches = rows.map((r) => {
-    const serviceCount = Number(r.services);
-    const present = Number(r.present);
-    return {
-      ...r,
-      active_members: Number(r.active_members),
-      open_follow_ups: Number(r.open_follow_ups),
-      services: serviceCount,
-      present,
-      absent: Number(r.absent),
-      excused: Number(r.excused),
-      avg_present_per_service: serviceCount > 0 ? Math.round((present / serviceCount) * 10) / 10 : null,
-    };
+  const { buffer, filename, counts } = await buildReportWorkbook({
+    from,
+    to,
+    scope: branchScope(req),
+    includeBranches: req.user.role === 'district_admin',
   });
 
-  // Church-wide roll-up for the district admin, including active members whose
-  // branch row no longer exists (branch_id IS NULL) so nobody is invisible.
-  const { rows: totalsRows } = await db.query(
-    `SELECT (SELECT COUNT(*) FROM members WHERE status = 'active') AS total_active_members,
-            (SELECT COUNT(*) FROM members WHERE branch_id IS NULL) AS unassigned_members,
-            (SELECT COUNT(*) FROM branches WHERE status = 'active') AS branch_count`
-  );
-  const totals = {
-    total_active_members: Number(totalsRows[0].total_active_members),
-    unassigned_members: Number(totalsRows[0].unassigned_members),
-    branch_count: Number(totalsRows[0].branch_count),
-  };
-
-  res.json({ from, to, totals, branches });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Length', String(buffer.length));
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Report-Rows', String(counts.attendance));
+  if (counts.attendanceTruncated) res.setHeader('X-Report-Truncated', 'true');
+  res.send(buffer);
 }));
 
 module.exports = router;

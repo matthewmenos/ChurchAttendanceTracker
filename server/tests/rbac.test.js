@@ -14,6 +14,7 @@ const adminOnlyEndpoints = [
   ['post', '/api/users'],
   ['get', '/api/reports/dashboard'],
   ['get', '/api/reports/summary'],
+  ['get', '/api/reports/export'],
   ['get', '/api/settings'],
   ['put', '/api/settings'],
   ['post', '/api/services'],
