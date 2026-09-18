@@ -271,7 +271,7 @@ export default function MembersPage() {
     setTransferring(true);
     try {
       const res = await api(`/members/${transferTarget.id}/transfer`, { method: 'POST', body: { branchId } });
-      toast(`Moved to ${res.transferred_to || 'the new branch'}.`);
+      toast(`Moved to ${res.transferred_to || 'the new local'}.`);
       setTransferTarget(null);
       await listQ.reload();
     } catch (err) {
@@ -320,7 +320,7 @@ export default function MembersPage() {
             <div>
               <h2 className='card-title' style={{ marginBottom: 2 }}>Allow ushers to add members</h2>
               <p className='muted small' style={{ margin: 0 }}>
-                When on, your ushers see a "+" button on their screen to sign up new members for {myBranch ? myBranch.name : 'your branch'}.
+                When on, your ushers see a "+" button on their screen to sign up new members for {myBranch ? myBranch.name : 'your local'}.
               </p>
             </div>
             <label className='checkbox' style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
@@ -459,9 +459,9 @@ export default function MembersPage() {
             </Field>
           </div>
           {!editing && canTransfer && (
-            <Field label='Branch' id='m-branch' hint='Which congregation this member belongs to.'>
+            <Field label='Local' id='m-branch' hint='Which congregation this member belongs to.'>
               <Select id='m-branch' name='branchId' defaultValue={currentBranchId ? String(currentBranchId) : ''}>
-                <option value=''>Choose a branch…</option>
+                <option value=''>Choose a local…</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
@@ -494,12 +494,12 @@ export default function MembersPage() {
       >
         <form onSubmit={doTransfer} noValidate>
           {transferTarget && transferTarget.branch_name && (
-            <p className='muted small'>Current branch: <strong>{transferTarget.branch_name}</strong></p>
+            <p className='muted small'>Current local: <strong>{transferTarget.branch_name}</strong></p>
           )}
-          <p className='muted small'>Attendance history is kept. Future marking happens at the new branch.</p>
-          <Field label='Move to branch' id='m-transfer-branch' required>
+          <p className='muted small'>Attendance history is kept. Future marking happens at the new local.</p>
+          <Field label='Move to local' id='m-transfer-branch' required>
             <Select id='m-transfer-branch' name='branchId' required>
-              <option value=''>Choose a branch…</option>
+              <option value=''>Choose a local…</option>
               {branches
                 .filter((b) => !transferTarget || b.id !== transferTarget.branch_id)
                 .map((b) => (

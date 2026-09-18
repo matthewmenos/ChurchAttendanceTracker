@@ -192,8 +192,8 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
       branchId = Number(req.body.branchId);
     }
     if (!branchId) {
-      throw new ApiError(400, 'Every service belongs to a branch. Pick a branch, or tick the all-branches box for a joint service.', [
-        { field: 'branchId', message: 'Branch is required.' },
+      throw new ApiError(400, 'Every service belongs to a local. Pick a local, or tick the all-locals box for a joint service.', [
+        { field: 'branchId', message: 'Local is required.' },
       ]);
     }
   }
@@ -201,8 +201,8 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
     const { rows: branchRows } = await db.query(
       `SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [branchId]);
     if (!branchRows.length) {
-      throw new ApiError(400, 'Invalid or inactive branch.', [
-        { field: 'branchId', message: 'Unknown branch.' },
+      throw new ApiError(400, 'Invalid or inactive local.', [
+        { field: 'branchId', message: 'Unknown local.' },
       ]);
     }
   }
@@ -284,8 +284,8 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
         const { rows: branchRows } = await db.query(
           `SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [next]);
         if (!branchRows.length) {
-          throw new ApiError(400, 'Invalid or inactive branch.', [
-            { field: 'branchId', message: 'Unknown branch.' },
+          throw new ApiError(400, 'Invalid or inactive local.', [
+            { field: 'branchId', message: 'Unknown local.' },
           ]);
         }
         branchId = next;
@@ -295,8 +295,8 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
   if (allBranches) {
     branchId = null;
   } else if (!branchId) {
-    throw new ApiError(400, 'Every service belongs to a branch. Pick a branch, or tick the all-branches box for a joint service.', [
-      { field: 'branchId', message: 'Branch is required.' },
+    throw new ApiError(400, 'Every service belongs to a local. Pick a local, or tick the all-locals box for a joint service.', [
+      { field: 'branchId', message: 'Local is required.' },
     ]);
   }
 

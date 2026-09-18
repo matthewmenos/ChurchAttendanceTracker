@@ -13,7 +13,7 @@ import { IconFileText } from '../../components/ui/icons.jsx';
 
 const ROLE_LABEL = {
   district_admin: 'District admin',
-  branch_admin: 'Branch admin',
+  branch_admin: 'Local admin',
   usher: 'Usher',
 };
 
@@ -179,7 +179,7 @@ export default function UsersPage() {
               },
               {
                 key: 'branch_name',
-                label: 'Branch',
+                label: 'Local',
                 render: (u) => (u.branch_name ? u.branch_name : <span className='muted'>—</span>),
               },
               { key: 'status', label: 'Status', render: (u) => <Badge variant={u.status}>{u.status === 'active' ? 'Active' : 'Inactive'}</Badge> },
@@ -231,22 +231,22 @@ export default function UsersPage() {
               <Field label='Role' id='u-role' required>
                 <Select id='u-role' name='role' defaultValue='usher'>
                   {isDistrict && <option value='district_admin'>District admin — full access</option>}
-                  {isDistrict && <option value='branch_admin'>Branch admin — manages one branch</option>}
+                  {isDistrict && <option value='branch_admin'>Local admin — manages one local</option>}
                   <option value='usher'>Usher — records attendance only</option>
                 </Select>
               </Field>
               {isDistrict ? (
-                <Field label='Branch' id='u-branch' hint='Required for ushers and branch admins; district admins are not branch-bound.'>
+                <Field label='Local' id='u-branch' hint='Required for ushers and local admins; district admins are not local-bound.'>
                   <Select id='u-branch' name='branchId' defaultValue=''>
-                    <option value=''>No branch (district admin only)</option>
+                    <option value=''>No local (district admin only)</option>
                     {branches.map((b) => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </Select>
                 </Field>
               ) : (
-                <Field label='Branch' id='u-branch' hint='New accounts are added to your own branch.'>
-                  <Input id='u-branch' value={me.branch_name || 'Your branch'} readOnly disabled />
+                <Field label='Local' id='u-branch' hint='New accounts are added to your own local.'>
+                  <Input id='u-branch' value={me.branch_name || 'Your local'} readOnly disabled />
                 </Field>
               )}
             </>
@@ -256,13 +256,13 @@ export default function UsersPage() {
               <Field label='Role' id='u-role' required hint='Changing the role re-scopes everything this account can reach.'>
                 <Select id='u-role' name='role' defaultValue={editing.role}>
                   <option value='district_admin'>District admin — full access</option>
-                  <option value='branch_admin'>Branch admin — manages one branch</option>
+                  <option value='branch_admin'>Local admin — manages one local</option>
                   <option value='usher'>Usher — records attendance only</option>
                 </Select>
               </Field>
-              <Field label='Branch' id='u-branch' hint='Required unless the role is district admin.'>
+              <Field label='Local' id='u-branch' hint='Required unless the role is district admin.'>
                 <Select id='u-branch' name='branchId' defaultValue={editing.branch_id || ''}>
-                  <option value=''>No branch (district admin only)</option>
+                  <option value=''>No local (district admin only)</option>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}

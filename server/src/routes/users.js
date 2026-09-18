@@ -103,34 +103,34 @@ router.post('/', asyncHandler(async (req, res) => {
   if (req.user.role === 'branch_admin') {
     if (!branchId) branchId = req.user.branch_id || null;
     if (!branchId) {
-      throw new ApiError(400, 'Your account has no branch assigned. Ask a district admin to set your branch first.');
+      throw new ApiError(400, 'Your account has no local assigned. Ask a district admin to set your local first.');
     }
     if (branchId !== req.user.branch_id) {
-      throw new ApiError(403, 'You can only create users in your own branch.');
+      throw new ApiError(403, 'You can only create users in your own local.');
     }
   }
 
   // Validate branch_id based on role
   if (role === 'district_admin' && branchId) {
-    throw new ApiError(400, 'District admin should not be assigned to a branch.');
+    throw new ApiError(400, 'District admin should not be assigned to a local.');
   }
   if ((role === 'branch_admin' || role === 'usher') && !branchId) {
-    throw new ApiError(400, 'Branch admin and usher must be assigned to a branch.');
+    throw new ApiError(400, 'Local admin and usher must be assigned to a local.');
   }
 
   // Verify branch exists
   if (branchId) {
     const branchCheck = await db.query(`SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [branchId]);
-    if (!branchCheck.rows.length) throw new ApiError(400, 'Invalid or inactive branch.');
+    if (!branchCheck.rows.length) throw new ApiError(400, 'Invalid or inactive local.');
   }
 
   // Branch admins manage ushers within their own branch only.
   if (req.user.role === 'branch_admin') {
     if (role !== 'usher') {
-      throw new ApiError(403, 'Branch admins can only create usher accounts.');
+      throw new ApiError(403, 'Local admins can only create usher accounts.');
     }
     if (branchId !== req.user.branch_id) {
-      throw new ApiError(403, 'You can only create users in your own branch.');
+      throw new ApiError(403, 'You can only create users in your own local.');
     }
   }
 
@@ -159,10 +159,10 @@ router.put('/:id', asyncHandler(async (req, res) => {
   // Branch admins manage ushers in their own branch only.
   if (req.user.role === 'branch_admin') {
     if (existing.role !== 'usher') {
-      throw new ApiError(403, 'Branch admins can only manage usher accounts.');
+      throw new ApiError(403, 'Local admins can only manage usher accounts.');
     }
     if (existing.branch_id !== req.user.branch_id) {
-      throw new ApiError(403, 'You can only manage users in your own branch.');
+      throw new ApiError(403, 'You can only manage users in your own local.');
     }
   }
 
@@ -195,17 +195,17 @@ router.put('/:id', asyncHandler(async (req, res) => {
   // The branch that applies once this request is saved.
   const nextBranchId = branchProvided ? branchId : existing.branch_id;
   if (role === 'district_admin') {
-    if (nextBranchId) throw new ApiError(400, 'District admin cannot be assigned to a branch.');
+    if (nextBranchId) throw new ApiError(400, 'District admin cannot be assigned to a local.');
   } else if (!nextBranchId) {
-    throw new ApiError(400, 'Branch admin and usher must be assigned to a branch.');
+    throw new ApiError(400, 'Local admin and usher must be assigned to a local.');
   }
 
   if (nextBranchId !== existing.branch_id) {
     const branchCheck = await db.query(`SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [nextBranchId]);
-    if (!branchCheck.rows.length) throw new ApiError(400, 'Invalid or inactive branch.');
+    if (!branchCheck.rows.length) throw new ApiError(400, 'Invalid or inactive local.');
     // Branch admin can only assign to their own branch
     if (req.user.role === 'branch_admin' && nextBranchId !== req.user.branch_id) {
-      throw new ApiError(403, 'You can only assign users to your own branch.');
+      throw new ApiError(403, 'You can only assign users to your own local.');
     }
   }
 
@@ -225,7 +225,7 @@ router.patch('/:id/status', asyncHandler(async (req, res) => {
   const existing = await findUser(id);
   if (!existing) throw new ApiError(404, 'User not found.');
   if (req.user.role === 'branch_admin' && (existing.role !== 'usher' || existing.branch_id !== req.user.branch_id)) {
-    throw new ApiError(403, 'You can only manage ushers in your own branch.');
+    throw new ApiError(403, 'You can only manage ushers in your own local.');
   }
   if (id === req.user.id && status === 'inactive') {
     throw new ApiError(400, 'You cannot deactivate your own account.');
@@ -254,7 +254,7 @@ router.post('/:id/reset-password', asyncHandler(async (req, res) => {
   const existing = await findUser(id);
   if (!existing) throw new ApiError(404, 'User not found.');
   if (req.user.role === 'branch_admin' && (existing.role !== 'usher' || existing.branch_id !== req.user.branch_id)) {
-    throw new ApiError(403, 'You can only manage ushers in your own branch.');
+    throw new ApiError(403, 'You can only manage ushers in your own local.');
   }
 
   const temporaryPassword = generateTempPassword();
@@ -275,7 +275,7 @@ router.get('/:id/attendance-records', asyncHandler(async (req, res) => {
   const existing = await findUser(id);
   if (!existing) throw new ApiError(404, 'User not found.');
   if (req.user.role === 'branch_admin' && (existing.role !== 'usher' || existing.branch_id !== req.user.branch_id)) {
-    throw new ApiError(403, 'You can only manage ushers in your own branch.');
+    throw new ApiError(403, 'You can only manage ushers in your own local.');
   }
 
   const { rows: totalsRows } = await db.query(

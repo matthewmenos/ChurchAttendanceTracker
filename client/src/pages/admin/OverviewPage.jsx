@@ -12,35 +12,35 @@ import { formatDate, formatShortDate, timeAgo } from '../../utils/format.js';
 
 function BranchComparison() {
   const { data, loading, error, reload } = useFetch(() => api('/reports/branches'), []);
-  if (loading) return <section className='card pad'><LoadingBlock label='Comparing branches…' /></section>;
+  if (loading) return <section className='card pad'><LoadingBlock label='Comparing locals…' /></section>;
   if (error) return <section className='card pad'><ErrorState error={error} onRetry={reload} /></section>;
 
   const rows = (data && data.branches) || [];
   const totals = (data && data.totals) || null;
   return (
-    <section className='card' aria-label='Branch comparison'>
+    <section className='card' aria-label='Local comparison'>
       <div className='card-head-row'>
-        <h2 className='card-title'>Attendance by branch</h2>
+        <h2 className='card-title'>Attendance by local</h2>
         <span className='muted small'>Last 90 days</span>
       </div>
       {totals && (
         <p className='muted small pad-inline'>
           <strong>{totals.total_active_members}</strong> active members across{' '}
-          <strong>{totals.branch_count}</strong> branches
+          <strong>{totals.branch_count}</strong> locals
           {totals.unassigned_members > 0 && (
-            <> · <strong>{totals.unassigned_members}</strong> member{totals.unassigned_members === 1 ? '' : 's'} not assigned to any branch</>
+            <> · <strong>{totals.unassigned_members}</strong> member{totals.unassigned_members === 1 ? '' : 's'} not assigned to any local</>
           )}
         </p>
       )}
       {rows.length === 0 ? (
-        <p className='muted pad-inline'>No active branches yet.</p>
+        <p className='muted pad-inline'>No active locals yet.</p>
       ) : (
         <Table
-          caption='Attendance comparison across branches'
+          caption='Attendance comparison across locals'
           rows={rows}
           getRowKey={(r) => r.id}
           columns={[
-            { key: 'name', label: 'Branch' },
+            { key: 'name', label: 'Local' },
             { key: 'active_members', label: 'Members', className: 'num' },
             { key: 'services', label: 'Services', className: 'num' },
             { key: 'present', label: 'Present', className: 'num' },

@@ -426,7 +426,7 @@ function buildMemberSheet(members) {
       { key: 'age', label: 'Age', type: 'int', width: 8 },
       { key: 'phone', label: 'Phone', type: 'text', width: 16 },
       { key: 'email', label: 'Email', type: 'text', width: 24 },
-      { key: 'branch_name', label: 'Branch', type: 'text', width: 18 },
+      { key: 'branch_name', label: 'Local', type: 'text', width: 18 },
       { key: 'group_name', label: 'Groups', type: 'text', width: 24 },
       { key: 'last_attended', label: 'Last attended', type: 'date', width: 12 },
       { key: 'consecutive_absences', label: 'Consecutive absences', type: 'int' },
@@ -467,12 +467,12 @@ function buildBranchSheet({ branches, totals }) {
   const sum = (key) => branches.reduce((n, r) => n + Number(r[key] || 0), 0);
   const services = sum('services');
   return {
-    name: 'By branch',
+    name: 'By local',
     title: `${totals.branch_count} active branches · ${totals.total_active_members} active members`,
     tabColor: 'FF6D28D9',
     landscape: true,
     columns: [
-      { key: 'name', label: 'Branch', type: 'text', width: 22 },
+      { key: 'name', label: 'Local', type: 'text', width: 22 },
       { key: 'location', label: 'Location', type: 'text', width: 18 },
       { key: 'active_members', label: 'Active members', type: 'int' },
       { key: 'open_follow_ups', label: 'Open follow-ups', type: 'int' },

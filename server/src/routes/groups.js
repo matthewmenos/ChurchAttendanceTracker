@@ -36,11 +36,11 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
     branchId = Number(req.body.branchId);
   }
   if (!branchId) {
-    throw new ApiError(400, 'Cannot create group: no branch assigned.');
+    throw new ApiError(400, 'Cannot create group: no local assigned.');
   }
   
   const dup = await db.query('SELECT id FROM member_groups WHERE lower(name) = $1 AND branch_id = $2', [name.toLowerCase(), branchId]);
-  if (dup.rows.length) throw new ApiError(409, 'A group with this name already exists in this branch.');
+  if (dup.rows.length) throw new ApiError(409, 'A group with this name already exists in this local.');
   const { rows } = await db.query(
     'INSERT INTO member_groups (name, leader_name, description, branch_id) VALUES ($1, $2, $3, $4) RETURNING *',
     [name, leaderName, description, branchId]

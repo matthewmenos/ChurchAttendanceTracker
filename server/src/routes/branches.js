@@ -58,16 +58,16 @@ router.get('/:id', asyncHandler(async (req, res) => {
       WHERE b.id = $1`,
     [id]
   );
-  if (!rows[0]) throw new ApiError(404, 'Branch not found.');
+  if (!rows[0]) throw new ApiError(404, 'Local not found.');
   if (req.user.role !== 'district_admin' && req.user.branch_id !== rows[0].id) {
-    throw new ApiError(403, 'You do not have access to this branch.');
+    throw new ApiError(403, 'You do not have access to this local.');
   }
   res.json({ branch: cleanBranch(rows[0]) });
 }));
 
 // POST /api/branches - create branch (district admin only)
 router.post('/', requireDistrictAdmin, asyncHandler(async (req, res) => {
-  const name = vStr(req.body, 'name', { required: true, max: 120, label: 'Branch name' });
+  const name = vStr(req.body, 'name', { required: true, max: 120, label: 'Local name' });
   const description = vStr(req.body, 'description', { max: 500 });
   const location = vStr(req.body, 'location', { max: 200 });
   const contactPhone = vStr(req.body, 'contactPhone', { max: 40 });
@@ -75,7 +75,7 @@ router.post('/', requireDistrictAdmin, asyncHandler(async (req, res) => {
 
   // Check for duplicate name
   const dup = await db.query('SELECT id FROM branches WHERE lower(name) = lower($1)', [name]);
-  if (dup.rows.length) throw new ApiError(409, 'A branch with this name already exists.');
+  if (dup.rows.length) throw new ApiError(409, 'A local with this name already exists.');
 
   const { rows } = await db.query(
     `INSERT INTO branches (name, description, location, contact_phone, contact_email)
@@ -90,9 +90,9 @@ router.post('/', requireDistrictAdmin, asyncHandler(async (req, res) => {
 router.put('/:id', requireDistrictAdmin, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const existing = await db.query('SELECT * FROM branches WHERE id = $1', [id]);
-  if (!existing.rows[0]) throw new ApiError(404, 'Branch not found.');
+  if (!existing.rows[0]) throw new ApiError(404, 'Local not found.');
 
-  const name = vStr(req.body, 'name', { required: true, max: 120, label: 'Branch name' });
+  const name = vStr(req.body, 'name', { required: true, max: 120, label: 'Local name' });
   const description = vStr(req.body, 'description', { max: 500 });
   const location = vStr(req.body, 'location', { max: 200 });
   const contactPhone = vStr(req.body, 'contactPhone', { max: 40 });
@@ -100,7 +100,7 @@ router.put('/:id', requireDistrictAdmin, asyncHandler(async (req, res) => {
 
   // Check for duplicate name (excluding current branch)
   const dup = await db.query('SELECT id FROM branches WHERE lower(name) = lower($1) AND id <> $2', [name, id]);
-  if (dup.rows.length) throw new ApiError(409, 'A branch with this name already exists.');
+  if (dup.rows.length) throw new ApiError(409, 'A local with this name already exists.');
 
   const { rows } = await db.query(
     `UPDATE branches
@@ -125,7 +125,7 @@ router.patch('/:id/allow-usher-add', requireAdmin, asyncHandler(async (req, res)
     `UPDATE branches SET allow_usher_add_member = $1 WHERE id = $2 AND status = 'active' RETURNING id, allow_usher_add_member`,
     [enabled, id]
   );
-  if (!rows[0]) throw new ApiError(404, 'Branch not found.');
+  if (!rows[0]) throw new ApiError(404, 'Local not found.');
   res.json({ branch: { id: rows[0].id, allow_usher_add_member: !!rows[0].allow_usher_add_member } });
 }));
 
@@ -133,7 +133,7 @@ router.patch('/:id/allow-usher-add', requireAdmin, asyncHandler(async (req, res)
 router.delete('/:id', requireDistrictAdmin, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const existing = await db.query('SELECT * FROM branches WHERE id = $1', [id]);
-  if (!existing.rows[0]) throw new ApiError(404, 'Branch not found.');
+  if (!existing.rows[0]) throw new ApiError(404, 'Local not found.');
 
   // Check if branch has members or users
   const { rows: countRows } = await db.query(
@@ -143,7 +143,7 @@ router.delete('/:id', requireDistrictAdmin, asyncHandler(async (req, res) => {
     [id]
   );
   if (Number(countRows[0].member_count) > 0 || Number(countRows[0].user_count) > 0) {
-    throw new ApiError(400, 'Cannot delete a branch that has members or users. Please reassign them first.');
+    throw new ApiError(400, 'Cannot delete a local that has members or users. Please reassign them first.');
   }
 
   await db.query("UPDATE branches SET status = 'inactive' WHERE id = $1", [id]);

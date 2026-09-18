@@ -53,7 +53,7 @@ function requireDistrictAdmin(req, res, next) {
 
 function requireBranchAdmin(req, res, next) {
   if (!req.user || (req.user.role !== 'branch_admin' && req.user.role !== 'district_admin')) {
-    return next(new ApiError(403, 'Branch admin access is required for this action.'));
+    return next(new ApiError(403, 'Local admin access is required for this action.'));
   }
   return next();
 }
@@ -85,7 +85,7 @@ function assertBranchAccess(user, branchId) {
   if (!user) throw new ApiError(401, 'Authentication required. Please sign in.');
   if (user.role === 'district_admin') return;
   if (branchId != null && Number(user.branch_id) === Number(branchId)) return;
-  throw new ApiError(403, 'You do not have access to this branch.');
+  throw new ApiError(403, 'You do not have access to this local.');
 }
 
 module.exports = { authenticate, requireAdmin, requireDistrictAdmin, requireBranchAdmin, getBranchFilter, assertBranchAccess, isAdminRole, ADMIN_ROLES, ACCESS_COOKIE, REFRESH_COOKIE };

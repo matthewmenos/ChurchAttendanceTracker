@@ -142,8 +142,8 @@ export default function VisitorsPage() {
           {STATUSES.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
         </Select>
         {isDistrict && (
-          <Select value={branchId} onChange={(e) => { setBranchId(e.target.value); setPage(1); }} aria-label='Filter by branch' className='select-fit'>
-            <option value=''>All branches</option>
+          <Select value={branchId} onChange={(e) => { setBranchId(e.target.value); setPage(1); }} aria-label='Filter by local' className='select-fit'>
+            <option value=''>All locals</option>
             {(branches || []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </Select>
         )}

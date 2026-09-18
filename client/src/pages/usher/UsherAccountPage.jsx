@@ -18,7 +18,7 @@ export default function UsherAccountPage() {
     navigate('/login');
   };
 
-  const roleLabel = user?.role === 'district_admin' ? 'District admin' : user?.role === 'branch_admin' ? 'Branch admin' : 'Usher';
+  const roleLabel = user?.role === 'district_admin' ? 'District admin' : user?.role === 'branch_admin' ? 'Local admin' : 'Usher';
 
   return (
     <div className='container'>

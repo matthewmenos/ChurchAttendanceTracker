@@ -35,7 +35,7 @@ const NAV_ITEMS = [
 ];
 
 const DISTRICT_NAV_ITEMS = [
-  { to: '/admin/branches', label: 'Branches', icon: IconMapPin },
+  { to: '/admin/branches', label: 'Locals', icon: IconMapPin },
 ];
 
 export default function AdminLayout() {
@@ -93,7 +93,7 @@ export default function AdminLayout() {
             <span className='user-meta'>
               <strong>{user ? user.name : ''}</strong>
               <Badge variant={user && user.role === 'district_admin' ? 'info' : 'neutral'}>
-                {user?.role === 'district_admin' ? 'District' : user?.role === 'branch_admin' ? 'Branch' : 'Admin'}
+                {user?.role === 'district_admin' ? 'District' : user?.role === 'branch_admin' ? 'Local' : 'Admin'}
               </Badge>
             </span>
           </div>

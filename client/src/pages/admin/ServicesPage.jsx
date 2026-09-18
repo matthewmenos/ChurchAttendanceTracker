@@ -131,7 +131,7 @@ export default function ServicesPage() {
             getRowKey={(r) => r.id}
             columns={[
               { key: 'service_date', label: 'Date', render: (r) => (<span><strong>{formatShortDate(r.service_date)}</strong><span className='muted small block'>{formatDate(r.service_date).split(', ').pop()}</span></span>) },
-              { key: 'service_name', label: 'Service', render: (r) => (<span><Link to={`/admin/services/${r.id}`} className='row-title'>{r.service_name}</Link>{r.all_branches ? <span> <Badge variant='info'>All branches</Badge></span> : null}</span>) },
+              { key: 'service_name', label: 'Service', render: (r) => (<span><Link to={`/admin/services/${r.id}`} className='row-title'>{r.service_name}</Link>{r.all_branches ? <span> <Badge variant='info'>All locals</Badge></span> : null}</span>) },
               { key: 'start_time', label: 'Time', render: (r) => (r.start_time ? formatTime(r.start_time) : '—') },
               { key: 'location_name', label: 'Location', render: (r) => r.location_name || '—' },
               { key: 'total_present', label: 'Total present', className: 'num', render: (r) => String(r.total_present ?? r.present ?? 0) },
@@ -184,10 +184,10 @@ export default function ServicesPage() {
           </Field>
           {isDistrict && (
             <Field
-              label='Branch'
+              label='Local'
               id='sv-branch'
               required={!jointChecked && !editing}
-              hint={jointChecked ? 'Joint services belong to no branch — the picker is disabled.' : (editing ? 'You can move this service to another branch.' : 'Every service belongs to a branch.')}
+              hint={jointChecked ? 'Joint services belong to no local — the picker is disabled.' : (editing ? 'You can move this service to another local.' : 'Every service belongs to a local.')}
             >
               <Select
                 id='sv-branch'
@@ -196,7 +196,7 @@ export default function ServicesPage() {
                 disabled={jointChecked}
                 defaultValue={editing && editing.branch_id ? String(editing.branch_id) : (currentBranchId ? String(currentBranchId) : '')}
               >
-                <option value=''>Choose a branch…</option>
+                <option value=''>Choose a local…</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
@@ -207,7 +207,7 @@ export default function ServicesPage() {
             <Field
               label='Joint service'
               id='sv-all-branches'
-              hint='Tick when all branches gather (e.g. combined service). The service then belongs to no branch — ushers of every branch can record attendance, and the roster includes every branch’s members.'
+              hint='Tick when all locals gather (e.g. combined service). The service then belongs to no local — ushers of every local can record attendance, and the roster includes every local’s members.'
             >
               <label className='checkbox' style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input
@@ -217,7 +217,7 @@ export default function ServicesPage() {
                   checked={jointChecked}
                   onChange={(e) => setJointChecked(e.target.checked)}
                 />
-                <span>All branches gather for this service</span>
+                <span>All locals gather for this service</span>
               </label>
             </Field>
           )}

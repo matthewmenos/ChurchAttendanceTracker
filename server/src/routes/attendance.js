@@ -241,7 +241,7 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
   // Members belong to a branch; they can only be marked for that branch's
   // services — except at a joint (all-branches) service, where everyone gathers.
   if (!service.all_branches && member.branch_id !== service.branch_id) {
-    throw new ApiError(400, 'This member belongs to a different branch than this service.');
+    throw new ApiError(400, 'This member belongs to a different local than this service.');
   }
   if (member.status !== 'active') {
     const existing = await db.query(
@@ -336,7 +336,7 @@ router.post('/code', authenticate, asyncHandler(async (req, res) => {
   const member = memberRows[0];
   if (!member) throw new ApiError(404, 'No member matches that code.');
   if (!service.all_branches && member.branch_id !== service.branch_id) {
-    throw new ApiError(400, 'This member belongs to a different branch than this service.');
+    throw new ApiError(400, 'This member belongs to a different local than this service.');
   }
   if (member.status !== 'active') {
     throw new ApiError(400, `${member.full_name} is inactive and cannot be marked.`);

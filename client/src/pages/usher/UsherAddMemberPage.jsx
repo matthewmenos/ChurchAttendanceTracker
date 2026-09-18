@@ -98,7 +98,7 @@ export default function UsherAddMemberPage() {
 
       <PageHeader
         title='Add member'
-        subtitle='The new member joins your branch and gets a sign-in PIN automatically.'
+        subtitle='The new member joins your local and gets a sign-in PIN automatically.'
       />
 
       {formError && <Alert variant='danger' title='Could not save.'>{formError}</Alert>}

@@ -18,14 +18,14 @@ router.post('/quick-add', authenticate, asyncHandler(async (req, res) => {
   const isAdmin = ['district_admin', 'branch_admin'].includes(req.user.role);
   if (!isAdmin) {
     if (!req.user.branch_id) {
-      throw new ApiError(403, 'Your account is not assigned to a branch, so you cannot add members.');
+      throw new ApiError(403, 'Your account is not assigned to a local, so you cannot add members.');
     }
     const { rows } = await db.query(
       `SELECT allow_usher_add_member FROM branches WHERE id = $1 AND status = 'active'`,
       [req.user.branch_id]
     );
     if (!rows[0] || !rows[0].allow_usher_add_member) {
-      throw new ApiError(403, 'Your branch admin has not enabled member sign-up for ushers.');
+      throw new ApiError(403, 'Your local admin has not enabled member sign-up for ushers.');
     }
   }
 
@@ -49,7 +49,7 @@ router.post('/quick-add', authenticate, asyncHandler(async (req, res) => {
     branchId = Number(req.body.branchId);
   }
   if (!branchId) {
-    throw new ApiError(400, 'Cannot add member: no branch assigned. Please contact your administrator.');
+    throw new ApiError(400, 'Cannot add member: no local assigned. Please contact your administrator.');
   }
 
   // 2-of-3 duplicate check (name / birthday / phone) before creating.
@@ -318,7 +318,7 @@ router.post('/', asyncHandler(async (req, res) => {
     branchId = Number(req.body.branchId);
   }
   if (!branchId) {
-    throw new ApiError(400, 'Cannot create member: no branch assigned. Please contact your administrator.');
+    throw new ApiError(400, 'Cannot create member: no local assigned. Please contact your administrator.');
   }
 
   // 2-of-3 duplicate check (name / birthday / phone) before creating.
@@ -468,12 +468,12 @@ router.post('/:id/transfer', requireDistrictAdmin, asyncHandler(async (req, res)
   const { rows: branchRows } = await db.query(
     `SELECT id, name FROM branches WHERE id = $1 AND status = 'active'`, [branchId]);
   if (!branchRows.length) {
-    throw new ApiError(400, 'Invalid or inactive branch.', [
-      { field: 'branchId', message: 'Unknown branch.' },
+    throw new ApiError(400, 'Invalid or inactive local.', [
+      { field: 'branchId', message: 'Unknown local.' },
     ]);
   }
   if (member.branch_id === branchId) {
-    throw new ApiError(400, 'The member already belongs to this branch.');
+    throw new ApiError(400, 'The member already belongs to this local.');
   }
 
   await db.query('UPDATE members SET branch_id = $1 WHERE id = $2', [branchId, id]);

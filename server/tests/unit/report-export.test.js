@@ -61,7 +61,7 @@ async function openWorkbook(buffer) {
   return { parts, sheetNames };
 }
 describe('report export workbook', () => {
-  test('writes a sheet per Reports table, with the branch sheet for a district admin', async () => {
+  test('writes a sheet per Reports table, with the local sheet for a district admin', async () => {
     const { buffer, filename, counts } = await buildReportWorkbook({
       from: '2024-01-01',
       to: '2024-03-31',
@@ -83,7 +83,7 @@ describe('report export workbook', () => {
       'Visitors register',
       'Members',
       'Attendance detail',
-      'By branch',
+      'By local',
     ]);
     expect(counts).toEqual({
       services: 2,
@@ -138,7 +138,7 @@ describe('report export workbook', () => {
     expect(parts['xl/styles.xml']).toContain('EFF6FF');
   });
 
-  test('omits the branch sheet for a branch-scoped admin', async () => {
+  test('omits the local sheet for a local-scoped admin', async () => {
     const { buffer, counts } = await buildReportWorkbook({
       from: '2024-01-01',
       to: '2024-03-31',
@@ -147,7 +147,7 @@ describe('report export workbook', () => {
     });
     const { sheetNames } = await openWorkbook(buffer);
 
-    expect(sheetNames).not.toContain('By branch');
+    expect(sheetNames).not.toContain('By local');
     expect(counts.branches).toBe(0);
     expect(seen.some((sql) => sql.includes('FROM branches b'))).toBe(false);
     // The branch id is bound as a parameter, never interpolated into the SQL.

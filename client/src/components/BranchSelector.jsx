@@ -17,7 +17,7 @@ export default function BranchSelector() {
   return (
     <div className="branch-selector">
       <label htmlFor="branch-select" className="branch-selector-label">
-        Branch:
+        Local:
       </label>
       <select
         id="branch-select"
@@ -25,7 +25,7 @@ export default function BranchSelector() {
         value={currentBranchId || ''}
         onChange={(e) => switchBranch(Number(e.target.value) || null)}
       >
-        <option value="">All Branches</option>
+        <option value="">All Locals</option>
         {branches.map((branch) => (
           <option key={branch.id} value={branch.id}>
             {branch.name}

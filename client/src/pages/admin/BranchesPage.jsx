@@ -19,7 +19,7 @@ export default function BranchesPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    document.title = 'Branches — Church Attendance Tracker';
+    document.title = 'Locals — Church Attendance Tracker';
   }, []);
 
   const listQ = useFetch(() => api('/branches'), []);
@@ -57,15 +57,15 @@ export default function BranchesPage() {
     try {
       if (editing) {
         await api(`/branches/${editing.id}`, { method: 'PUT', body: payload });
-        toast('Branch updated.');
+        toast('Local updated.');
       } else {
         await api('/branches', { method: 'POST', body: payload });
-        toast('Branch created.');
+        toast('Local created.');
       }
       setFormOpen(false);
       listQ.reload();
     } catch (err) {
-      setFormError(err.message || 'Could not save the branch.');
+      setFormError(err.message || 'Could not save the local.');
     } finally {
       setSaving(false);
     }
@@ -75,10 +75,10 @@ export default function BranchesPage() {
     if (!confirmDelete) return;
     try {
       await api(`/branches/${confirmDelete.id}`, { method: 'DELETE' });
-      toast('Branch deactivated.');
+      toast('Local deactivated.');
       listQ.reload();
     } catch (err) {
-      toast(err.message || 'Could not delete the branch.');
+      toast(err.message || 'Could not delete the local.');
     } finally {
       setConfirmDelete(null);
     }
@@ -89,9 +89,9 @@ export default function BranchesPage() {
   return (
     <div className='container'>
       <PageHeader
-        title='Branches'
-        subtitle='Manage church branches and their local administrations.'
-        actions={<Button onClick={openCreate}>+ Add Branch</Button>}
+        title='Locals'
+        subtitle='Manage church locals and their administrations.'
+        actions={<Button onClick={openCreate}>+ Add Local</Button>}
       />
 
       {listQ.loading && <LoadingBlock />}
@@ -100,16 +100,16 @@ export default function BranchesPage() {
       {!listQ.loading && !listQ.error && items.length === 0 && (
         <EmptyState
           icon={<IconUsers size={44} />}
-          title='No branches yet'
-          message='Create your first branch to start managing multiple locations.'
-          action={<Button onClick={openCreate}>+ Add Branch</Button>}
+          title='No locals yet'
+          message='Create your first local to start managing multiple locations.'
+          action={<Button onClick={openCreate}>+ Add Local</Button>}
         />
       )}
 
       {!listQ.loading && !listQ.error && items.length > 0 && (
         <div className='card'>
           <table className='table'>
-            <caption className='sr-only'>Church branches</caption>
+            <caption className='sr-only'>Church locals</caption>
             <thead>
               <tr>
                 <th scope='col'>Name</th>
@@ -145,7 +145,7 @@ export default function BranchesPage() {
           </table>
         </div>
       )}
-      <Modal open={formOpen} title={editing ? 'Edit Branch' : 'Add Branch'} onClose={() => setFormOpen(false)}>
+      <Modal open={formOpen} title={editing ? 'Edit Local' : 'Add Local'} onClose={() => setFormOpen(false)}>
         <form onSubmit={saveBranch}>
           {formError && <Alert variant="error">{formError}</Alert>}
           <Field label="Name" id="b-name"><Input id="b-name" name="name" defaultValue={editing?.name || ''} required /></Field>
@@ -165,7 +165,7 @@ export default function BranchesPage() {
           </div>
         </form>
       </Modal>
-      <ConfirmDialog open={!!confirmDelete} title="Delete branch?" message={`Are you sure you want to delete "${confirmDelete?.name}"?`} confirmLabel="Delete" danger onConfirm={deleteBranch} onCancel={() => setConfirmDelete(null)} />
+      <ConfirmDialog open={!!confirmDelete} title="Delete local?" message={`Are you sure you want to delete "${confirmDelete?.name}"?`} confirmLabel="Delete" danger onConfirm={deleteBranch} onCancel={() => setConfirmDelete(null)} />
     </div>
   );
 }
