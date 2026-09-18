@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import useFetch from '../../hooks/useFetch.js';
+import useDuplicateCheck from '../../hooks/useDuplicateCheck.js';
 import { api } from '../../api/client.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import { PageHeader } from '../../components/ui/display.jsx';
@@ -20,6 +21,20 @@ function calcAge(bd) {
   return a >= 0 ? a : null;
 }
 
+/** Builds the yellow duplicate warning shown above the form fields. */
+function DuplicateWarning({ member, matchedOn }) {
+  if (!member) return null;
+  const where = member.branch_name ? ` in ${member.branch_name}` : '';
+  return (
+    <Alert variant='warning' title='Possible duplicate member'>
+      <span>
+        {member.full_name} already exists{where} (same {matchedOn.join(' and ')}).{' '}
+        Check the members list before saving a second record.
+      </span>
+    </Alert>
+  );
+}
+
 /** Usher screen for signing up a new member (branch-admin enabled).
  *  Mirrors the admin member form - all fields, minus the branch picker
  *  (the member always joins the usher's own branch). */
@@ -29,7 +44,13 @@ export default function UsherAddMemberPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [birthday, setBirthday] = useState('');
+  // Controlled name/phone so the live duplicate pre-check can watch them.
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const age = useMemo(() => calcAge(birthday), [birthday]);
+
+  const dupCheck = useDuplicateCheck({ fullName, phone, birthday });
+  const isDuplicate = dupCheck.duplicate === true;
 
   useEffect(() => {
     document.title = 'Add member - Church Attendance Tracker';
@@ -81,18 +102,35 @@ export default function UsherAddMemberPage() {
       />
 
       {formError && <Alert variant='danger' title='Could not save.'>{formError}</Alert>}
+      <DuplicateWarning member={dupCheck.member} matchedOn={dupCheck.matchedOn} />
 
       <section className='card pad' aria-label='Add member form'>
         <form onSubmit={saveMember} noValidate>
           <Field label='Full name' id='ua-name' required>
-            <Input id='ua-name' name='fullName' required maxLength={120} autoComplete='off' placeholder='e.g. Ama Mensah' />
+            <Input
+              id='ua-name'
+              name='fullName'
+              required
+              maxLength={120}
+              autoComplete='off'
+              placeholder='e.g. Ama Mensah'
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
           </Field>
           <div className='field-row'>
             <Field label='Email' id='ua-email' hint='Optional'>
               <Input id='ua-email' name='email' type='email' maxLength={200} />
             </Field>
             <Field label='Phone' id='ua-phone' hint='Optional'>
-              <Input id='ua-phone' name='phone' type='tel' maxLength={40} />
+              <Input
+                id='ua-phone'
+                name='phone'
+                type='tel'
+                maxLength={40}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
             </Field>
           </div>
           <Field label='Groups' id='ua-groups' hint='A member can belong to more than one group.'>
@@ -161,7 +199,7 @@ export default function UsherAddMemberPage() {
           </Field>
           <div className='modal-actions'>
             <Button variant='secondary' type='button' onClick={() => navigate('/usher')}>Cancel</Button>
-            <Button type='submit' loading={saving}>Add member</Button>
+            <Button type='submit' loading={saving} disabled={isDuplicate}>Add member</Button>
           </div>
         </form>
       </section>

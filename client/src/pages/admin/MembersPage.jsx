@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useFetch from '../../hooks/useFetch.js';
 import useDebounce from '../../hooks/useDebounce.js';
+import useDuplicateCheck from '../../hooks/useDuplicateCheck.js';
 import { api } from '../../api/client.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useAuth } from '../../auth/AuthContext.jsx';
@@ -110,6 +111,11 @@ export default function MembersPage() {
   // Birthday is a controlled input so we can auto-fill the read-only Age field.
   const [birthday, setBirthday] = useState('');
   const [age, setAge] = useState(null);
+  // Controlled name/phone (add + edit) so the live duplicate pre-check can watch them.
+  const [formName, setFormName] = useState('');
+  const [formPhone, setFormPhone] = useState('');
+  const dupCheck = useDuplicateCheck({ fullName: formName, phone: formPhone, birthday, excludeId: editing ? editing.id : null });
+  const isDuplicate = dupCheck.duplicate === true;
   // Branch transfer (district admin only).
   const [transferTarget, setTransferTarget] = useState(null);
   const [transferring, setTransferring] = useState(false);
@@ -171,6 +177,8 @@ export default function MembersPage() {
     setEditing(null);
     setBirthday('');
     setAge(null);
+    setFormName('');
+    setFormPhone('');
     setFormError('');
     setFormOpen(true);
   };
@@ -179,6 +187,8 @@ export default function MembersPage() {
     setEditing(member);
     setBirthday(member.birthday || '');
     setAge(member.age || null);
+    setFormName(member.full_name || '');
+    setFormPhone(member.phone || '');
     setFormError('');
     setFormOpen(true);
   };
@@ -219,6 +229,20 @@ export default function MembersPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  /** Builds the yellow duplicate warning shown inside the member form modal. */
+  const DuplicateWarning = () => {
+    if (!dupCheck.member) return null;
+    const where = dupCheck.member.branch_name ? ` in ${dupCheck.member.branch_name}` : '';
+    return (
+      <Alert variant='warning' title='Possible duplicate member'>
+        <span>
+          {dupCheck.member.full_name} already exists{where} (same {dupCheck.matchedOn.join(' and ')}).{' '}
+          Check the members list before saving a second record.
+        </span>
+      </Alert>
+    );
   };
 
   const toggleStatus = async () => {
@@ -340,15 +364,30 @@ export default function MembersPage() {
       <Modal open={formOpen} title={editing ? `Edit — ${editing.full_name}` : 'Add a member'} onClose={() => setFormOpen(false)} width='520px'>
         <form onSubmit={saveMember} noValidate>
           {formError && <Alert variant='error'>{formError}</Alert>}
+          <DuplicateWarning />
           <Field label='Full name' id='m-name' required>
-            <Input id='m-name' name='fullName' defaultValue={editing ? editing.full_name : ''} required maxLength={120} autoComplete='off' />
+            <Input
+              id='m-name'
+              name='fullName'
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
+              required
+              maxLength={120}
+              autoComplete='off'
+            />
           </Field>
           <div className='field-row'>
             <Field label='Email' id='m-email' hint='Optional'>
               <Input id='m-email' name='email' type='email' defaultValue={editing ? editing.email : ''} maxLength={200} />
             </Field>
             <Field label='Phone' id='m-phone' hint='Optional'>
-              <Input id='m-phone' name='phone' defaultValue={editing ? editing.phone : ''} maxLength={40} />
+              <Input
+                id='m-phone'
+                name='phone'
+                value={formPhone}
+                onChange={(e) => setFormPhone(e.target.value)}
+                maxLength={40}
+              />
             </Field>
           </div>
           <Field label='Groups' id='m-groups' hint='A member can belong to more than one group.'>
@@ -442,7 +481,7 @@ export default function MembersPage() {
           </Field>
           <div className='modal-actions'>
             <Button variant='secondary' type='button' onClick={() => setFormOpen(false)}>Cancel</Button>
-            <Button type='submit' loading={saving}>{editing ? 'Save changes' : 'Add member'}</Button>
+            <Button type='submit' loading={saving} disabled={isDuplicate}>{editing ? 'Save changes' : 'Add member'}</Button>
           </div>
         </form>
       </Modal>

@@ -52,6 +52,9 @@ router.post('/quick-add', authenticate, asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Cannot add member: no branch assigned. Please contact your administrator.');
   }
 
+  // 2-of-3 duplicate check (name / birthday / phone) before creating.
+  await assertNoDuplicate({ fullName, birthday, phone });
+
   try {
     const memberCode = await generateMemberCode(db);
     const { rows } = await db.query(
@@ -66,6 +69,85 @@ router.post('/quick-add', authenticate, asyncHandler(async (req, res) => {
     if (e.code === '23505') throw new ApiError(409, 'A member with this email already exists.');
     throw e;
   }
+}));
+
+// ==================== DUPLICATE DETECTION ====================
+// Rule: a member is a duplicate of an existing one when at least 2 of the
+// 3 identifying fields (full name, birthday, phone) match. Pure helpers
+// live in ../utils/duplicates.js; only the DB-scoring lives here.
+
+const {
+  normalizeName,
+  normalizePhone,
+  matchedCriteria,
+} = require('../utils/duplicates');
+
+/**
+ * Best-matching other member for the given identifying fields, with a
+ * `matches` count. Returns null when nothing shares any usable field.
+ * The scoring runs in SQL (mirroring the JS normalisation) so one
+ * round-trip both filters and ranks.
+ */
+async function findDuplicateMember({ fullName, birthday, phone, excludeId }) {
+  const nameKey = normalizeName(fullName);
+  const birthdayKey = birthday || null;
+  const phoneKey = normalizePhone(phone);
+  if (!nameKey && !birthdayKey && !phoneKey) return null;
+  const { rows } = await db.query(
+    `SELECT m.id, m.full_name, m.phone, m.birthday, m.status, b.name AS branch_name,
+            (COALESCE(($1 IS NOT NULL AND lower(regexp_replace(m.full_name, '\\s+', ' ', 'g')) = $1)::int, 0)
+           + COALESCE(($2::date IS NOT NULL AND m.birthday = $2::date)::int, 0)
+           + COALESCE(($3 IS NOT NULL AND length(regexp_replace(m.phone, '[^0-9]', '', 'g')) >= 7
+                        AND right(regexp_replace(m.phone, '[^0-9]', '', 'g'), 9) = $3)::int, 0)) AS matches
+       FROM members m
+       LEFT JOIN branches b ON b.id = m.branch_id
+      WHERE m.id <> COALESCE($4, -1)
+      ORDER BY matches DESC
+      LIMIT 1`,
+    [nameKey, birthdayKey, phoneKey, excludeId || null]
+  );
+  return rows[0] || null;
+}
+
+/** Throws 409 when the member matches an existing one on 2 of the 3 fields. */
+async function assertNoDuplicate(input) {
+  const dup = await findDuplicateMember(input);
+  if (!dup || dup.matches < 2) return;
+  const on = matchedCriteria(input, dup);
+  const where = dup.branch_name ? ` in ${dup.branch_name}` : '';
+  throw new ApiError(
+    409,
+    `Possible duplicate: ${dup.full_name} already exists${where} (same ${on.join(' and ')}).`,
+    [{ field: 'duplicate', message: `${dup.full_name}${where} — same ${on.join(' and ')}.` }]
+  );
+}
+
+/**
+ * Live duplicate pre-check used by the member forms while they are being
+ * filled in. Registered BEFORE the admin-only gate below (like quick-add)
+ * so ushers can use it from their add-member screen. Only the minimum
+ * identifying info is returned - never email, phone or PIN.
+ */
+router.get('/check-duplicate', authenticate, asyncHandler(async (req, res) => {
+  const fullName = vStr(req.query, 'fullName', { max: 120 });
+  const phone = vStr(req.query, 'phone', { max: 40 });
+  const birthday = vDate(req.query, 'birthday');
+  const excludeId = vInt(req.query, 'excludeId');
+  const dup = await findDuplicateMember({ fullName, birthday, phone, excludeId });
+  if (!dup || dup.matches < 2) {
+    return res.json({ duplicate: false, matches: 0, matchedOn: [], member: null });
+  }
+  return res.json({
+    duplicate: true,
+    matches: dup.matches,
+    matchedOn: matchedCriteria({ fullName, birthday, phone }, dup),
+    member: {
+      id: dup.id,
+      full_name: dup.full_name,
+      branch_name: dup.branch_name || null,
+      status: dup.status,
+    },
+  });
 }));
 
 // All member management is admin-only, enforced on the server.
@@ -239,6 +321,9 @@ router.post('/', asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Cannot create member: no branch assigned. Please contact your administrator.');
   }
 
+  // 2-of-3 duplicate check (name / birthday / phone) before creating.
+  await assertNoDuplicate({ fullName, birthday, phone });
+
   try {
     // Every member gets a short door code for quick attendance marking.
     const memberCode = await generateMemberCode(db);
@@ -293,6 +378,10 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const status = vEnum(req.body, 'status', ['active', 'inactive']) || existing.status;
   const notes = vStr(req.body, 'notes', { max: 1000 });
   const age = ageFromBirthday(birthday);
+
+  // 2-of-3 duplicate check (name / birthday / phone); exclude this member
+  // itself so saving unchanged data never flags its own record.
+  await assertNoDuplicate({ fullName, birthday, phone, excludeId: id });
 
   try {
     await db.query(
