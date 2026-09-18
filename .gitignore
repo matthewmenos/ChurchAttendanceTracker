@@ -4,6 +4,15 @@ coverage/
 .env
 .env.test
 *.log
+*.tmp
 .DS_Store
 Thumbs.db
 .vercel/
+
+# Temp output/capture files (build logs, test dumps, smoke scripts)
+*-out.txt
+*-err.txt
+build.txt
+f1.txt
+f2.txt
+_reports_tail.tmp

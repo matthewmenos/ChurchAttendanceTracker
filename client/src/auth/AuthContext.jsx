@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api } from '../api/client.js';
+import { api, clearApiCache } from '../api/client.js';
 
 export const AuthContext = createContext(null);
 
@@ -69,6 +69,10 @@ export function AuthProvider({ children }) {
       setUser(null);
       setBranches([]);
       setCurrentBranchId(null);
+      // Sessions now survive app restarts, so signing out must also drop the API
+      // data the service worker cached on this device — otherwise the next user
+      // of a shared phone could reopen the app and read it offline.
+      await clearApiCache();
     }
   }, []);
 

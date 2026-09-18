@@ -12,9 +12,12 @@ function signAccessToken(user) {
   });
 }
 
-function signRefreshToken() {
+function signRefreshToken(user) {
   const jti = crypto.randomUUID();
-  const token = jwt.sign({ jti }, env.jwtRefreshSecret, {
+  // `sub` identifies the owner: the refresh route loads the account from it, so
+  // a refresh token without it can never be redeemed (it would 401 as soon as
+  // the access token lapsed). `jti` is the rotation handle.
+  const token = jwt.sign({ sub: user.id, jti }, env.jwtRefreshSecret, {
     expiresIn: `${env.refreshTokenTtlDays}d`,
   });
   const expiresAt = new Date(Date.now() + env.refreshTokenTtlDays * 24 * 60 * 60 * 1000);

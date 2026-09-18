@@ -1,8 +1,9 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+﻿import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { Alert } from '../ui/feedback.jsx';
 import Logo from '../ui/Logo.jsx';
 import { IconCalendar, IconUsers, IconClipboardCheck, IconSettings, IconPlus } from '../ui/icons.jsx';
+import PullToRefresh from '../PullToRefresh.jsx';
 
 const TABS = [
   { to: '/usher', label: 'Home', icon: IconCalendar, end: true },
@@ -53,7 +54,9 @@ export default function UsherLayout() {
       )}
 
       <main id='main-content' className='usher-main'>
-        <Outlet />
+        <PullToRefresh>
+          <Outlet />
+        </PullToRefresh>
       </main>
 
       <nav className='bottom-nav' aria-label='Usher sections'>

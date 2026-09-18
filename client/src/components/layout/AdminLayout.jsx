@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { Avatar, Badge } from '../ui/display.jsx';
@@ -8,6 +8,7 @@ import Logo from '../ui/Logo.jsx';
 import ChangePasswordModal from '../ChangePasswordModal.jsx';
 import InstallPrompt from '../InstallPrompt.jsx';
 import BranchSelector from '../BranchSelector.jsx';
+import PullToRefresh from '../PullToRefresh.jsx';
 import {
   IconChart,
   IconClipboardCheck,
@@ -133,7 +134,9 @@ export default function AdminLayout() {
         )}
 
         <main id='main-content' className='admin-main'>
-          <Outlet />
+          <PullToRefresh>
+            <Outlet />
+          </PullToRefresh>
         </main>
       </div>
 

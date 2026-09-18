@@ -9,8 +9,8 @@ Present / Absent / Excused during a live service in just a few taps.
 | Frontend | React 18 · React Router 6 · Vite · hand-rolled CSS design system |
 | Backend | Node.js · Express 4 · REST API |
 | Database | PostgreSQL (parameterised queries, SQL migrations, seed script) |
-| Auth | bcryptjs password hashing · JWT access token (15 min) + rotating refresh token (7 days) in HttpOnly cookies |
-| Tests | Jest + Supertest (auth, RBAC, members, services, attendance, users) |
+| Auth | bcryptjs password hashing · JWT access token (15 min) + rotating refresh token (30 days, sliding) in HttpOnly cookies |
+| Tests | Jest + Supertest (auth, RBAC, members, services, attendance, users) + offline unit suites (Excel writer, report export, session) |
 
 ---
 
@@ -93,7 +93,8 @@ npm test                   # auto-creates church_attendance_test DB, migrates, r
   totals, consecutive-absence streaks, group & contact info, follow-up plans.
 - **Services** – create/edit, upcoming/past tabs, headcount, per-service roster view.
 - **Reports** – totals, trends, by service/group/usher, repeat absentees,
-  active-vs-inactive, CSV export for attendance and members.
+  active-vs-inactive, CSV export for attendance and members, plus a one-click
+  Excel workbook (charted summary dashboard + a sheet per table).
 - **User management** – create usher/admin accounts, one-time temporary passwords,
   reset passwords, deactivate/reactivate, last login, records created per usher.
 - **Settings** – church name, usher correction toggle + window, contact visibility,
@@ -109,7 +110,7 @@ npm test                   # auto-creates church_attendance_test DB, migrates, r
 
 - Passwords hashed with bcrypt (cost 10; 4 in tests). Plaintext is never stored or returned.
 - Login rate-limited (10 attempts / 15 min / IP+email) with account-enumeration-safe errors.
-- Access JWT (15 min) + refresh JWT (7 days) in **HttpOnly, SameSite=Lax** cookies;
+- Access JWT (15 min) + refresh JWT (30 days, sliding) in **HttpOnly, SameSite=Lax** cookies;
   refresh tokens are rotated and stored as SHA-256 hashes so they can be revoked.
 - Logout, deactivation and password reset revoke sessions immediately.
 - `authenticate` middleware re-loads the user on every request (deactivated = cut off).
@@ -120,6 +121,45 @@ npm test                   # auto-creates church_attendance_test DB, migrates, r
   on every attendance row; `created_by` on users/services/follow-ups.
 - Ushers may correct **only their own** records, only while the admin-enabled window
   (default 30 min) is open.
+
+### Staying signed in on the installed app (PWA)
+
+The app is meant to live on a phone home screen, so closing it must not sign
+anyone out.
+
+- The access cookie only has to survive one app session; the **refresh cookie is
+  what carries the session**. It lasts 30 days and *slides*: every silent refresh
+  rotates it and grants a fresh full window, so a device that opens the app at
+  least once a month never asks for a password again. Tune with
+  `REFRESH_TOKEN_TTL_DAYS` (keep it ≥ 30 — the gap between services can be weeks).
+- The silent refresh lives in `client/src/api/client.js`. Only the session
+  boundaries (`POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`) are
+  excluded from it; everything else — including `GET /auth/me`, the call that
+  rehydrates the session on app start — is retried once through the refresh
+  cookie on a 401.
+- **`COOKIE_SECURE` must match how the app is served.** A `Secure` cookie is
+  silently discarded over plain `http`, except on `http://localhost` where
+  browsers make an exception. So `COOKIE_SECURE=true` can look fine on the dev PC
+  while breaking every phone opening the installed PWA over a LAN IP. Use `false`
+  locally, `true` in production (HTTPS).
+- Signing out also clears the service-worker API cache (see `clearApiCache()`),
+  so a shared phone cannot show the previous user's cached data. A session that
+  merely *expires* keeps its cache, so ushers can still work from cached rosters
+  in a dead spot.
+- iOS caps cookie storage for sites with no user interaction in 7 days; opening
+  the app inside that window keeps the session alive.
+
+### Pull to refresh
+
+A native-style pull-down gesture is wired into both the admin and usher layouts.
+Drag down from the top of any page (touch on a phone, or mouse drag on desktop)
+past the threshold to refresh: the service-worker API cache is cleared first so
+the next data fetch hits the network instead of stale cached data, then the page
+reloads with fresh content.
+
+
+
+
 
 ## API overview (`/api`)
 
@@ -136,7 +176,7 @@ npm test                   # auto-creates church_attendance_test DB, migrates, r
 | Attendance | `GET /attendance`, `GET /attendance/:id`, `DELETE /attendance/:id` | admin |
 | Groups/Locations | `GET …` shared · `POST·PUT·DELETE …` admin |
 | Follow-ups | `/followups` CRUD | admin |
-| Reports | `GET /reports/dashboard`, `GET /reports/summary` | admin |
+| Reports | `GET /reports/dashboard`, `GET /reports/summary`, `GET /reports/branches`, `GET /reports/export` (Excel) | admin |
 | Settings | `GET /settings/public` shared · `GET·PUT /settings` admin |
 
 Validation errors return `400 { message, errors:[{field,message}] }`; authorization
@@ -151,10 +191,11 @@ server/
     middleware/ auth.js (authenticate, requireAdmin) error.js
     routes/     auth users members services attendance groups locations followups reports settings index
     services/   stats.js (streak recompute) settings.js
-    utils/      errors validate tokens passwords
+    utils/      errors validate tokens passwords xlsx (Excel writer)
   migrations/   schema.sql (complete consolidated schema; auto-applied on deploy)
   scripts/      migrate.js seed.js
   tests/        global-setup helpers auth rbac members services attendance users
+                unit/ (xlsx-writer report-export session — no Postgres needed)
 client/
   src/
     api/          fetch wrapper w/ silent refresh
@@ -163,6 +204,8 @@ client/
     hooks/        useFetch useDebounce useRoster
     pages/        login, denied, 404, admin/* (8 pages), usher/* (2 pages)
     styles.css    design tokens + components + responsive rules
+    utils/        csv download format
+  tests/          api-client.test.js (Node built-in runner — npm test)
 ```
 
 ## Design notes
@@ -179,7 +222,8 @@ client/
 - The sign-in page shows **no demo credentials** — nothing about accounts is hardcoded client-side.
 - `consecutive_absences` counts leading consecutive `absent` marks; `excused` pauses
   the streak without punishing, `present` resets it.
-- CSV export is generated client-side from paginated API data.
+- CSV export is generated client-side from paginated API data; the Excel
+  workbook (`GET /reports/export`) is built server-side with native charts.
 - SameSite=Lax cookies + JSON-only APIs are the CSRF mitigation strategy; add a
   token header if you embed the API behind a different origin.
 ---

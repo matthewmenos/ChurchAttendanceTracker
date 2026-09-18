@@ -333,3 +333,12 @@ export function IconUpload(props) {
   );
 }
 
+export function IconRefresh(props) {
+  return (
+    <Svg {...props}>
+      <path d='M3 12a9 9 0 0 1 9-9 9 9 0 0 1 9 9 9 9 0 0 1-9 9 9 9 0 0 1-9-9' />
+      <line x1='12' y1='3v6l3 3' />
+    </Svg>
+  );
+}
+

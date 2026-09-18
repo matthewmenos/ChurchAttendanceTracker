@@ -10,6 +10,7 @@ import './styles.css';
 // Register the PWA service worker (precaches the app shell, runtime-caches
 // /api GETs for offline data). autoUpdate keeps ushers on the latest build.
 import { registerSW } from 'virtual:pwa-register';
+import { PullToRefreshProvider } from './context/PullToRefreshContext.jsx';
 registerSW({ immediate: true });
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -18,7 +19,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <ToastProvider>
         <OfflinePage />
         <AuthProvider>
-          <App />
+          <PullToRefreshProvider>
+            <App />
+          </PullToRefreshProvider>
         </AuthProvider>
       </ToastProvider>
     </BrowserRouter>

@@ -86,7 +86,7 @@ async function loadPublicUser(id) {
 
 async function startSession(res, user) {
   const accessToken = signAccessToken(user);
-  const { token: refreshToken, expiresAt } = signRefreshToken();
+  const { token: refreshToken, expiresAt } = signRefreshToken(user);
   await db.query(
     'INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
     [user.id, sha256(refreshToken), expiresAt]
