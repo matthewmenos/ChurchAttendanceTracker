@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
 import { AuthProvider } from './auth/AuthContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
+import SplashScreen from './components/SplashScreen.jsx';
 import OfflinePage from './pages/OfflinePage.jsx';
 import './styles.css';
 
@@ -17,6 +18,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <ToastProvider>
+        <SplashScreen />
         <OfflinePage />
         <AuthProvider>
           <PullToRefreshProvider>
