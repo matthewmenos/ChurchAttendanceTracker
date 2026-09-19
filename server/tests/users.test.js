@@ -1,4 +1,4 @@
-process.env.NODE_ENV = 'test';
+﻿process.env.NODE_ENV = 'test';
 
 const request = require('supertest');
 const { app, db, resetTables, loginAs, seedBase } = require('./helpers');
@@ -17,7 +17,7 @@ describe('User management (admin only)', () => {
     const { admin, base } = await setup();
     const res = await admin
       .post('/api/users')
-      .send({ name: 'New Usher', email: 'new.usher@test.app', role: 'usher', branchId: base.branchId });
+      .send({ name: 'New Usher', email: 'new.usher@test.app', role: 'usher', localId: base.localId });
     expect(res.status).toBe(201);
     expect(res.body.user.role).toBe('usher');
     expect(res.body.user.must_change_password).toBe(true);
@@ -34,7 +34,7 @@ describe('User management (admin only)', () => {
     const { admin, base } = await setup();
     const res = await admin
       .post('/api/users')
-      .send({ name: 'Clone', email: 'usher@test.app', role: 'usher', branchId: base.branchId });
+      .send({ name: 'Clone', email: 'usher@test.app', role: 'usher', localId: base.localId });
     expect(res.status).toBe(409);
   });
 
@@ -131,12 +131,13 @@ describe('Usernames', () => {
     const admin = await loginAs('admin@test.app');
     const ok = await admin
       .post('/api/users')
-      .send({ name: 'U Two', email: 'u2@test.app', role: 'usher', username: 'usher2', branchId: base.branchId });
+      .send({ name: 'U Two', email: 'u2@test.app', role: 'usher', username: 'usher2', localId: base.localId });
     expect(ok.status).toBe(201);
     expect(ok.body.user.username).toBe('usher2');
     const dup = await admin
       .post('/api/users')
-      .send({ name: 'U Three', email: 'u3@test.app', role: 'usher', username: 'USHER2', branchId: base.branchId });
+      .send({ name: 'U Three', email: 'u3@test.app', role: 'usher', username: 'USHER2', localId: base.localId });
     expect(dup.status).toBe(409);
   });
 });
+

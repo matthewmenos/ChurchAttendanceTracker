@@ -5,15 +5,15 @@ export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [branches, setBranches] = useState([]);
-  const [currentBranchId, setCurrentBranchId] = useState(null);
+  const [locals, setLocals] = useState([]);
+  const [currentLocalId, setCurrentLocalId] = useState(null);
   const [initializing, setInitializing] = useState(true);
 
-  // Load branches for district admin
-  const loadBranches = useCallback(async () => {
+  // Load locals for district admin
+  const loadLocals = useCallback(async () => {
     try {
-      const data = await api('/branches');
-      setBranches(data.items || []);
+      const data = await api('/locals');
+      setLocals(data.items || []);
       return data.items || [];
     } catch (e) {
       return [];
@@ -26,13 +26,13 @@ export function AuthProvider({ children }) {
       .then((data) => {
         if (!alive) return;
         setUser(data.user);
-        // Set initial branch from user
-        if (data.user?.branch_id) {
-          setCurrentBranchId(data.user.branch_id);
+        // Set initial local from user
+        if (data.user?.local_id) {
+          setCurrentLocalId(data.user.local_id);
         }
-        // Load branches for district admin
+        // Load locals for district admin
         if (data.user?.role === 'district_admin') {
-          loadBranches();
+          loadLocals();
         }
       })
       .catch(() => {
@@ -48,27 +48,27 @@ export function AuthProvider({ children }) {
       alive = false;
       window.removeEventListener('cat:unauthorized', onExpired);
     };
-  }, [loadBranches]);
+  }, [loadLocals]);
 
   const login = useCallback(async (email, password) => {
     const data = await api('/auth/login', { method: 'POST', body: { email, password } });
     setUser(data.user);
-    if (data.user?.branch_id) {
-      setCurrentBranchId(data.user.branch_id);
+    if (data.user?.local_id) {
+      setCurrentLocalId(data.user.local_id);
     }
     if (data.user?.role === 'district_admin') {
-      loadBranches();
+      loadLocals();
     }
     return data.user;
-  }, [loadBranches]);
+  }, [loadLocals]);
 
   const logout = useCallback(async () => {
     try {
       await api('/auth/logout', { method: 'POST' });
     } finally {
       setUser(null);
-      setBranches([]);
-      setCurrentBranchId(null);
+      setLocals([]);
+      setCurrentLocalId(null);
       // Sessions now survive app restarts, so signing out must also drop the API
       // data the service worker cached on this device — otherwise the next user
       // of a shared phone could reopen the app and read it offline.
@@ -76,13 +76,13 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const switchBranch = useCallback((branchId) => {
-    setCurrentBranchId(branchId);
+  const switchLocal = useCallback((localId) => {
+    setCurrentLocalId(localId);
   }, []);
 
   const value = useMemo(
-    () => ({ user, setUser, branches, currentBranchId, switchBranch, initializing, login, logout, loadBranches }),
-    [user, branches, currentBranchId, switchBranch, initializing, login, logout, loadBranches]
+    () => ({ user, setUser, locals, currentLocalId, switchLocal, initializing, login, logout, loadLocals }),
+    [user, locals, currentLocalId, switchLocal, initializing, login, logout, loadLocals]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

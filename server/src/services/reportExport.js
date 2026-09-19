@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 /**
  * Builds the .xlsx report workbook: a Summary dashboard (with native, editable
@@ -10,7 +10,7 @@
 
 const db = require('../config/db');
 const { createWorkbook, toIsoDate } = require('../utils/xlsx');
-const { getReportSummary, getBranchReport, makeBranchWhere } = require('./reports');
+const { getReportSummary, getLocalReport, makeLocalWhere } = require('./reports');
 const { getSettingsMap } = require('./settings');
 const { visitorStats } = require('./visitors');
 
@@ -31,10 +31,10 @@ const SUBTITLE_STYLE = { size: 10, color: MUTED };
 const SECTION_STYLE = { bold: true, border: 'top' };
 const TOTAL_STYLE = { bold: true, border: 'top', fill: TOTAL_FILL };
 
-/** Attendance records for the range, branch-scoped exactly like the report. */
+/** Attendance records for the range, local-scoped exactly like the report. */
 async function fetchAttendanceDetail(scope, from, to) {
-  const branchWhere = makeBranchWhere(scope);
-  const b = branchWhere([from, to], 's');
+  const localWhere = makeLocalWhere(scope);
+  const b = localWhere([from, to], 's');
   const { rows } = await db.query({
     text: `
       SELECT s.service_date, s.service_name, m.full_name AS member_name,
@@ -60,19 +60,19 @@ async function fetchAttendanceDetail(scope, from, to) {
 
 /** The member register for the signed-in admin's scope. */
 async function fetchMembers(scope) {
-  const branchWhere = makeBranchWhere(scope);
-  const b = branchWhere([], 'm');
+  const localWhere = makeLocalWhere(scope);
+  const b = localWhere([], 'm');
   const { rows } = await db.query({
     text: `
       SELECT m.full_name, m.member_code, m.status, m.gender, m.age, m.phone, m.email,
-             br.name AS branch_name, m.last_attended, m.consecutive_absences,
+             br.name AS local_name, m.last_attended, m.consecutive_absences,
              COALESCE((
                SELECT string_agg(g.name, ', ' ORDER BY g.name)
                  FROM member_group_assignments mga JOIN member_groups g ON g.id = mga.group_id
                 WHERE mga.member_id = m.id
              ), '') AS group_name
         FROM members m
-        LEFT JOIN branches br ON br.id = m.branch_id
+        LEFT JOIN locals br ON br.id = m.local_id
        WHERE TRUE${b.sql}
        ORDER BY m.full_name ASC
        LIMIT ${DETAIL_LIMIT}`,
@@ -82,9 +82,9 @@ async function fetchMembers(scope) {
 }
 
 /**
- * Visitor register. The branch predicate mirrors services/visitors.js: a visitor
- * belongs to the branch of the service they attended, or - when the visit had no
- * service - to the branch of the user who captured them.
+ * Visitor register. The local predicate mirrors services/visitors.js: a visitor
+ * belongs to the local of the service they attended, or - when the visit had no
+ * service - to the local of the user who captured them.
  */
 async function fetchVisitors(scope, { followupStatus, search } = {}) {
   const where = [];
@@ -93,8 +93,8 @@ async function fetchVisitors(scope, { followupStatus, search } = {}) {
     params.push(scope);
     const n = params.length;
     where.push(
-      `(v.service_id IN (SELECT id FROM services WHERE branch_id = $${n})
-        OR (v.service_id IS NULL AND v.created_by IN (SELECT id FROM users WHERE branch_id = $${n})))`
+      `(v.service_id IN (SELECT id FROM services WHERE local_id = $${n})
+        OR (v.service_id IS NULL AND v.created_by IN (SELECT id FROM users WHERE local_id = $${n})))`
     );
   }
   if (followupStatus) { params.push(followupStatus); where.push(`v.followup_status = $${params.length}`); }
@@ -123,7 +123,7 @@ async function fetchVisitors(scope, { followupStatus, search } = {}) {
 
 /** Member/follow-up headline counts (same queries as the dashboard endpoint). */
 async function fetchOverviewCounts(scope) {
-  const memberB = makeBranchWhere(scope)([], 'm');
+  const memberB = makeLocalWhere(scope)([], 'm');
   const { rows: memberRows } = await db.query({
     text: `SELECT COUNT(*) FILTER (WHERE m.status = 'active')   AS active,
                   COUNT(*) FILTER (WHERE m.status = 'inactive') AS inactive
@@ -131,7 +131,7 @@ async function fetchOverviewCounts(scope) {
             WHERE TRUE${memberB.sql}`,
     values: memberB.params,
   });
-  const followUpB = makeBranchWhere(scope)([], 'm');
+  const followUpB = makeLocalWhere(scope)([], 'm');
   const { rows: followUpRows } = await db.query({
     text: `SELECT COUNT(*) AS n
              FROM follow_ups f
@@ -148,7 +148,7 @@ async function fetchOverviewCounts(scope) {
 
 // ------------------------------------------------------------------- sheets
 
-/** "1 service" / "2 services" — totals rows read better with real plurals. */
+/** "1 service" / "2 services" â€” totals rows read better with real plurals. */
 function plural(n, word) {
   return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
@@ -426,7 +426,7 @@ function buildMemberSheet(members) {
       { key: 'age', label: 'Age', type: 'int', width: 8 },
       { key: 'phone', label: 'Phone', type: 'text', width: 16 },
       { key: 'email', label: 'Email', type: 'text', width: 24 },
-      { key: 'branch_name', label: 'Local', type: 'text', width: 18 },
+      { key: 'local_name', label: 'Local', type: 'text', width: 18 },
       { key: 'group_name', label: 'Groups', type: 'text', width: 24 },
       { key: 'last_attended', label: 'Last attended', type: 'date', width: 12 },
       { key: 'consecutive_absences', label: 'Consecutive absences', type: 'int' },
@@ -441,7 +441,7 @@ function buildAttendanceSheet(rows) {
   return {
     name: 'Attendance detail',
     title: capped
-      ? `Attendance detail (first ${DETAIL_LIMIT} rows — narrow the date range for a complete file)`
+      ? `Attendance detail (first ${DETAIL_LIMIT} rows â€” narrow the date range for a complete file)`
       : `Attendance detail (${rows.length} rows)`,
     tabColor: MUTED,
     landscape: true,
@@ -462,13 +462,13 @@ function buildAttendanceSheet(rows) {
   };
 }
 
-/** District-only comparison: every active branch side by side. */
-function buildBranchSheet({ branches, totals }) {
-  const sum = (key) => branches.reduce((n, r) => n + Number(r[key] || 0), 0);
+/** District-only comparison: every active local side by side. */
+function buildLocalSheet({ locals, totals }) {
+  const sum = (key) => locals.reduce((n, r) => n + Number(r[key] || 0), 0);
   const services = sum('services');
   return {
     name: 'By local',
-    title: `${totals.branch_count} active branches · ${totals.total_active_members} active members`,
+    title: `${totals.local_count} active locals Â· ${totals.total_active_members} active members`,
     tabColor: 'FF6D28D9',
     landscape: true,
     columns: [
@@ -483,10 +483,10 @@ function buildBranchSheet({ branches, totals }) {
       { key: 'avg_present_per_service', label: 'Avg present / service', type: 'number', numFmt: '#,##0.0' },
     ],
     rows: [
-      ...branches,
+      ...locals,
       {
         values: {
-          name: `All branches (${branches.length})`,
+          name: `All locals (${locals.length})`,
           active_members: sum('active_members'),
           open_follow_ups: sum('open_follow_ups'),
           services,
@@ -506,21 +506,21 @@ function buildBranchSheet({ branches, totals }) {
 /**
  * Build the workbook for one export request.
  *
- * `scope` limits the data to a single branch (null = every branch for a district
- * admin), `from`/`to` are ISO dates and `includeBranches` adds the district-only
- * branch comparison sheet. Returns the .xlsx bytes, the download filename and the
+ * `scope` limits the data to a single local (null = every local for a district
+ * admin), `from`/`to` are ISO dates and `includeLocals` adds the district-only
+ * local comparison sheet. Returns the .xlsx bytes, the download filename and the
  * row counts of each sheet (so the route can report what was written).
  */
-async function buildReportWorkbook({ from, to, scope = null, includeBranches = false }) {
-  const [summary, settings, counts, visitors, memberRows, attendanceRows, branchReport, visitorRows] = await Promise.all([
+async function buildReportWorkbook({ from, to, scope = null, includeLocals = false }) {
+  const [summary, settings, counts, visitors, memberRows, attendanceRows, localReport, visitorRows] = await Promise.all([
     getReportSummary(db, { from, to, scope }),
     getSettingsMap(db),
     fetchOverviewCounts(scope),
     fetchVisitors(scope),
     fetchMembers(scope),
     fetchAttendanceDetail(scope, from, to),
-    includeBranches ? getBranchReport(db, { from, to }) : Promise.resolve(null),
-    visitorStats({ from, to, branchId: scope || undefined }),
+    includeLocals ? getLocalReport(db, { from, to }) : Promise.resolve(null),
+    visitorStats({ from, to, localId: scope || undefined }),
   ]);
 
   const now = new Date();
@@ -538,7 +538,7 @@ async function buildReportWorkbook({ from, to, scope = null, includeBranches = f
     buildMemberSheet(memberRows),
     buildAttendanceSheet(attendanceRows),
   ];
-  if (branchReport) sheets.push(buildBranchSheet(branchReport));
+  if (localReport) sheets.push(buildLocalSheet(localReport));
 
   const buffer = await createWorkbook({
     properties: {
@@ -561,7 +561,7 @@ async function buildReportWorkbook({ from, to, scope = null, includeBranches = f
       visitors: visitors.length,
       attendance: attendanceRows.length,
       attendanceTruncated: attendanceRows.length >= DETAIL_LIMIT,
-      branches: branchReport ? branchReport.branches.length : 0,
+      locals: localReport ? localReport.locals.length : 0,
     },
   };
 }
@@ -574,3 +574,5 @@ module.exports = {
   fetchVisitors,
   fetchOverviewCounts,
 };
+
+

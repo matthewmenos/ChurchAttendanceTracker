@@ -1,8 +1,8 @@
-const express = require('express');
+﻿const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vDate, vTime } = require('../utils/validate');
-const { authenticate, requireAdmin, getBranchFilter, assertBranchAccess } = require('../middleware/auth');
+const { authenticate, requireAdmin, getLocalFilter, assertLocalAccess } = require('../middleware/auth');
 const { getServiceTotals } = require('../services/stats');
 const { syncFollowUps } = require('../services/followups');
 
@@ -10,8 +10,8 @@ const router = express.Router();
 
 const LIST_SELECT = `
   SELECT s.id, s.service_date, s.service_name, s.start_time, s.total_headcount, s.notes,
-         s.location_id, l.name AS location_name, s.branch_id, b.name AS branch_name, s.created_at, s.updated_at,
-         s.all_branches,
+         s.location_id, l.name AS location_name, s.local_id, b.name AS local_name, s.created_at, s.updated_at,
+         s.all_locals,
          s.attendance_closed, s.attendance_closed_at, cb.name AS attendance_closed_by_name,
          s.attendance_close_time,
          s.visitor_headcount,
@@ -22,7 +22,7 @@ const LIST_SELECT = `
          (COALESCE(a.present, 0) + COALESCE(s.visitor_headcount, 0))::int AS total_present
     FROM services s
     LEFT JOIN locations l ON l.id = s.location_id
-    LEFT JOIN branches b ON b.id = s.branch_id
+    LEFT JOIN locals b ON b.id = s.local_id
     LEFT JOIN users cb ON cb.id = s.attendance_closed_by
     LEFT JOIN (
       SELECT service_id,
@@ -61,27 +61,27 @@ function withFlags(row) {
     ...row,
     visitor_headcount: visitorHeadcount,
     total_present: presentMembers + visitorHeadcount,
-    all_branches: !!row.all_branches,
+    all_locals: !!row.all_locals,
     upcoming: String(row.service_date) >= todayStr,
     marking_closed: !!row.attendance_closed || schedulePassed,
   };
 }
 
 /**
- * Branch access for a service. Joint services (all_branches = TRUE, e.g. a
- * combined all-branches gathering) can be viewed and marked by staff of ANY
- * branch; regular services keep the strict same-branch rule.
+ * Local access for a service. Joint services (all_locals = TRUE, e.g. a
+ * combined all-locals gathering) can be viewed and marked by staff of ANY
+ * local; regular services keep the strict same-local rule.
  */
 function checkServiceAccess(user, service) {
-  if (!service.all_branches) assertBranchAccess(user, service.branch_id);
+  if (!service.all_locals) assertLocalAccess(user, service.local_id);
 }
 
-/** Only the district admin may flag a service as a joint all-branches service. */
-function readAllBranches(user, body) {
-  const wanted = !!body && ['1', 'true'].includes(String(body.allBranches).toLowerCase());
+/** Only the district admin may flag a service as a joint all-locals service. */
+function readAllLocals(user, body) {
+  const wanted = !!body && ['1', 'true'].includes(String(body.allLocals).toLowerCase());
   if (!wanted) return false;
   if (user.role !== 'district_admin') {
-    throw new ApiError(403, 'Only the main admin can create an all-branches service.');
+    throw new ApiError(403, 'Only the main admin can create an all-locals service.');
   }
   return true;
 }
@@ -143,11 +143,11 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   const where = [];
   const params = [];
   
-  // Branch filtering — but joint (all-branches) services are visible to everyone.
-  const branchId = getBranchFilter(req);
-  if (branchId) {
-    params.push(branchId);
-    where.push(`(s.branch_id = $${params.length} OR s.all_branches = TRUE)`);
+  // Local filtering â€” but joint (all-locals) services are visible to everyone.
+  const localId = getLocalFilter(req);
+  if (localId) {
+    params.push(localId);
+    where.push(`(s.local_id = $${params.length} OR s.all_locals = TRUE)`);
   }
   
   if (search) {
@@ -181,37 +181,37 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const visitorHeadcount = readVisitorHeadcount(req.body) || 0;
   const notes = vStr(req.body, 'notes', { max: 500 });
   const closeTime = readCloseTime(req.body);
-  const allBranches = readAllBranches(req.user, req.body);
+  const allLocals = readAllLocals(req.user, req.body);
 
-  // Joint services (all branches gather) belong to no specific branch.
-  // Regular services belong to the creator's branch, or the branch a
+  // Joint services (all locals gather) belong to no specific local.
+  // Regular services belong to the creator's local, or the local a
   // district admin explicitly picks.
-  let branchId = req.user.role === 'district_admin' ? null : req.user.branch_id;
-  if (!allBranches) {
-    if (req.user.role === 'district_admin' && req.body.branchId) {
-      branchId = Number(req.body.branchId);
+  let localId = req.user.role === 'district_admin' ? null : req.user.local_id;
+  if (!allLocals) {
+    if (req.user.role === 'district_admin' && req.body.localId) {
+      localId = Number(req.body.localId);
     }
-    if (!branchId) {
+    if (!localId) {
       throw new ApiError(400, 'Every service belongs to a local. Pick a local, or tick the all-locals box for a joint service.', [
-        { field: 'branchId', message: 'Local is required.' },
+        { field: 'localId', message: 'Local is required.' },
       ]);
     }
   }
-  if (branchId) {
-    const { rows: branchRows } = await db.query(
-      `SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [branchId]);
-    if (!branchRows.length) {
+  if (localId) {
+    const { rows: localRows } = await db.query(
+      `SELECT id FROM locals WHERE id = $1 AND status = 'active'`, [localId]);
+    if (!localRows.length) {
       throw new ApiError(400, 'Invalid or inactive local.', [
-        { field: 'branchId', message: 'Unknown local.' },
+        { field: 'localId', message: 'Unknown local.' },
       ]);
     }
   }
 
   const { rows } = await db.query(
-    `INSERT INTO services (service_date, service_name, start_time, location_id, total_headcount, visitor_headcount, notes, created_by, attendance_close_time, branch_id, all_branches)
+    `INSERT INTO services (service_date, service_name, start_time, location_id, total_headcount, visitor_headcount, notes, created_by, attendance_close_time, local_id, all_locals)
      VALUES ($1, $2, $3, $4, 0, $5, $6, $7, $8, $9, $10)
      RETURNING id`,
-    [serviceDate, serviceName, startTime, locationId, visitorHeadcount, notes, req.user.id, closeTime, branchId, allBranches]
+    [serviceDate, serviceName, startTime, locationId, visitorHeadcount, notes, req.user.id, closeTime, localId, allLocals]
   );
   res.status(201).json({ service: withFlags(await serviceById(rows[0].id)) });
 }));
@@ -267,36 +267,36 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
   const visitorHeadcount = readVisitorHeadcount(req.body);
   const notes = vStr(req.body, 'notes', { max: 500 });
   const closeTime = readCloseTime(req.body);
-  const allBranches = readAllBranches(req.user, req.body) || (existing.all_branches && req.body.allBranches === undefined);
+  const allLocals = readAllLocals(req.user, req.body) || (existing.all_locals && req.body.allLocals === undefined);
 
-  // Joint services belong to no specific branch; toggling a service to
-  // joint clears its branch, toggling back requires picking one.
-  // District admins may also move a regular service to another branch
-  // (branchId omitted = keep current; empty/null = clear to joint-ready).
-  let branchId = existing.branch_id;
-  if (req.user.role === 'district_admin' && req.body.branchId !== undefined) {
-    const raw = req.body.branchId;
+  // Joint services belong to no specific local; toggling a service to
+  // joint clears its local, toggling back requires picking one.
+  // District admins may also move a regular service to another local
+  // (localId omitted = keep current; empty/null = clear to joint-ready).
+  let localId = existing.local_id;
+  if (req.user.role === 'district_admin' && req.body.localId !== undefined) {
+    const raw = req.body.localId;
     if (raw === null || raw === '') {
-      branchId = null;
+      localId = null;
     } else {
-      const next = vInt(req.body, 'branchId');
+      const next = vInt(req.body, 'localId');
       if (next) {
-        const { rows: branchRows } = await db.query(
-          `SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [next]);
-        if (!branchRows.length) {
+        const { rows: localRows } = await db.query(
+          `SELECT id FROM locals WHERE id = $1 AND status = 'active'`, [next]);
+        if (!localRows.length) {
           throw new ApiError(400, 'Invalid or inactive local.', [
-            { field: 'branchId', message: 'Unknown local.' },
+            { field: 'localId', message: 'Unknown local.' },
           ]);
         }
-        branchId = next;
+        localId = next;
       }
     }
   }
-  if (allBranches) {
-    branchId = null;
-  } else if (!branchId) {
+  if (allLocals) {
+    localId = null;
+  } else if (!localId) {
     throw new ApiError(400, 'Every service belongs to a local. Pick a local, or tick the all-locals box for a joint service.', [
-      { field: 'branchId', message: 'Local is required.' },
+      { field: 'localId', message: 'Local is required.' },
     ]);
   }
 
@@ -304,10 +304,10 @@ router.put('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) => 
     `UPDATE services
         SET service_date = $1, service_name = $2, start_time = $3,
             location_id = $4, notes = $5, attendance_close_time = $6,
-            branch_id = $7, all_branches = $8,
+            local_id = $7, all_locals = $8,
             visitor_headcount = COALESCE($9, visitor_headcount)
       WHERE id = $10`,
-    [serviceDate, serviceName, startTime, locationId, notes, closeTime, branchId, allBranches,
+    [serviceDate, serviceName, startTime, locationId, notes, closeTime, localId, allLocals,
      visitorHeadcount === undefined ? null : visitorHeadcount, id]
   );
   res.json({ service: withFlags(await serviceById(id)) });
@@ -336,7 +336,8 @@ router.get('/:id/attendance', authenticate, requireAdmin, asyncHandler(async (re
       ORDER BY m.full_name ASC`,
     [id]
   );
-  res.json({ service: withFlags(service), totals: await getServiceTotals(db, id, service.all_branches ? null : service.branch_id), items: rows });
+  res.json({ service: withFlags(service), totals: await getServiceTotals(db, id, service.all_locals ? null : service.local_id), items: rows });
 }));
 
 module.exports = router;
+

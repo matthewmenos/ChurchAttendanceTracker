@@ -1,12 +1,12 @@
--- =====================================================================
+﻿-- =====================================================================
 --  Church Attendance Tracker : COMPLETE CONSOLIDATED SCHEMA
 --  Combines migrations 001-013 into one idempotent, deployable schema.
 --  Safe to run repeatedly against the same database.
 -- =====================================================================
 
--- ============================= BRANCHES =============================
--- Created first so branch_id foreign keys resolve on other tables.
-CREATE TABLE IF NOT EXISTS branches (
+-- ============================= LOCALS =============================
+-- Created first so local_id foreign keys resolve on other tables.
+CREATE TABLE IF NOT EXISTS locals (
   id            SERIAL PRIMARY KEY,
   name          TEXT NOT NULL UNIQUE,
   description   TEXT,
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS branches (
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS branches_id_idx ON branches(id);
+CREATE INDEX IF NOT EXISTS locals_id_idx ON locals(id);
 
 -- ============================== USERS ==============================
 CREATE TABLE IF NOT EXISTS users (
@@ -28,13 +28,13 @@ CREATE TABLE IF NOT EXISTS users (
   email                TEXT NOT NULL UNIQUE,
   password_hash        TEXT NOT NULL,
   role                 TEXT NOT NULL DEFAULT 'usher'
-                         CHECK (role IN ('district_admin', 'branch_admin', 'usher')),
+                         CHECK (role IN ('district_admin', 'local_admin', 'usher')),
   status               TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
   must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
   phone                TEXT,
   username             TEXT,
   last_login_at        TIMESTAMPTZ,
-  branch_id            INTEGER REFERENCES branches(id) ON DELETE SET NULL,
+  local_id            INTEGER REFERENCES locals(id) ON DELETE SET NULL,
   created_by           INTEGER REFERENCES users(id),
   created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx ON users (lower(username))
   WHERE username IS NOT NULL AND username <> '';
-CREATE INDEX IF NOT EXISTS users_branch_idx ON users(branch_id);
+CREATE INDEX IF NOT EXISTS users_local_idx ON users(local_id);
 
 -- ========================== MEMBER GROUPS ==========================
 CREATE TABLE IF NOT EXISTS member_groups (
@@ -50,24 +50,24 @@ CREATE TABLE IF NOT EXISTS member_groups (
   name        TEXT NOT NULL UNIQUE,
   description TEXT,
   leader_name TEXT,
-  branch_id   INTEGER REFERENCES branches(id) ON DELETE SET NULL,
+  local_id   INTEGER REFERENCES locals(id) ON DELETE SET NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS member_groups_branch_idx ON member_groups(branch_id);
+CREATE INDEX IF NOT EXISTS member_groups_local_idx ON member_groups(local_id);
 
 -- ============================ LOCATIONS ============================
 CREATE TABLE IF NOT EXISTS locations (
   id          SERIAL PRIMARY KEY,
   name        TEXT NOT NULL UNIQUE,
   description TEXT,
-  branch_id   INTEGER REFERENCES branches(id) ON DELETE SET NULL,
+  local_id   INTEGER REFERENCES locals(id) ON DELETE SET NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS locations_branch_idx ON locations(branch_id);
+CREATE INDEX IF NOT EXISTS locations_local_idx ON locations(local_id);
 -- ============================= MEMBERS =============================
 CREATE TABLE IF NOT EXISTS members (
   id                  SERIAL PRIMARY KEY,
@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS members (
   residence           TEXT,
   age                 INTEGER CHECK (age >= 0),
   member_code         TEXT,
-  branch_id           INTEGER REFERENCES branches(id) ON DELETE SET NULL,
+  local_id           INTEGER REFERENCES locals(id) ON DELETE SET NULL,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS members (
 CREATE UNIQUE INDEX IF NOT EXISTS members_email_unique_idx
   ON members (lower(email)) WHERE email IS NOT NULL AND email <> '';
 CREATE INDEX IF NOT EXISTS members_status_idx ON members(status);
-CREATE INDEX IF NOT EXISTS members_branch_idx ON members(branch_id);
+CREATE INDEX IF NOT EXISTS members_local_idx ON members(local_id);
 CREATE INDEX IF NOT EXISTS members_birthday_idx ON members(birthday);
 
 -- ===================== MEMBER GROUP ASSIGNMENTS ====================
@@ -120,8 +120,8 @@ CREATE TABLE IF NOT EXISTS services (
   attendance_closed_at    TIMESTAMPTZ,
   attendance_closed_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
   attendance_close_time   TIMESTAMPTZ,
-  branch_id               INTEGER REFERENCES branches(id) ON DELETE SET NULL,
-  all_branches            BOOLEAN NOT NULL DEFAULT FALSE,
+  local_id               INTEGER REFERENCES locals(id) ON DELETE SET NULL,
+  all_locals            BOOLEAN NOT NULL DEFAULT FALSE,
   visitor_headcount       INTEGER NOT NULL DEFAULT 0 CHECK (visitor_headcount >= 0),
   created_by              INTEGER REFERENCES users(id),
   created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS services (
 );
 
 CREATE INDEX IF NOT EXISTS services_date_idx ON services(service_date DESC);
-CREATE INDEX IF NOT EXISTS services_branch_idx ON services(branch_id);
+CREATE INDEX IF NOT EXISTS services_local_idx ON services(local_id);
 
 -- ============================ ATTENDANCE ===========================
 CREATE TABLE IF NOT EXISTS attendance (
@@ -286,30 +286,30 @@ DROP TRIGGER IF EXISTS trg_settings_updated ON settings;
 CREATE TRIGGER trg_settings_updated BEFORE UPDATE ON settings FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 DROP TRIGGER IF EXISTS trg_visitors_updated ON visitors;
 CREATE TRIGGER trg_visitors_updated BEFORE UPDATE ON visitors FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-DROP TRIGGER IF EXISTS trg_branches_updated ON branches;
-CREATE TRIGGER trg_branches_updated BEFORE UPDATE ON branches FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+DROP TRIGGER IF EXISTS trg_locals_updated ON locals;
+CREATE TRIGGER trg_locals_updated BEFORE UPDATE ON locals FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- ====================== DEFAULT BRANCH DATA =======================
-INSERT INTO branches (name, description)
-SELECT 'Main Branch', 'Default branch for existing data'
-WHERE NOT EXISTS (SELECT 1 FROM branches WHERE name = 'Main Branch');
+-- ====================== DEFAULT LOCAL DATA =======================
+INSERT INTO locals (name, description)
+SELECT 'Main Local', 'Default local for existing data'
+WHERE NOT EXISTS (SELECT 1 FROM locals WHERE name = 'Main Local');
 
-UPDATE users        SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;
-UPDATE members      SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;
-UPDATE services     SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;
-UPDATE member_groups SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;
-UPDATE locations    SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;
+UPDATE users        SET local_id = (SELECT id FROM locals WHERE name = 'Main Local') WHERE local_id IS NULL;
+UPDATE members      SET local_id = (SELECT id FROM locals WHERE name = 'Main Local') WHERE local_id IS NULL;
+UPDATE services     SET local_id = (SELECT id FROM locals WHERE name = 'Main Local') WHERE local_id IS NULL;
+UPDATE member_groups SET local_id = (SELECT id FROM locals WHERE name = 'Main Local') WHERE local_id IS NULL;
+UPDATE locations    SET local_id = (SELECT id FROM locals WHERE name = 'Main Local') WHERE local_id IS NULL;
 
 -- ================= RECONCILE EXISTING DATABASES =================
 -- The following run on already-initialised databases so they are brought
 -- up to the same state as a fresh install. They are no-ops on fresh DBs.
 
--- Multi-branch columns (safe if the table already exists from old schema).
-ALTER TABLE users         ADD COLUMN IF NOT EXISTS branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL;
-ALTER TABLE members       ADD COLUMN IF NOT EXISTS branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL;
-ALTER TABLE services      ADD COLUMN IF NOT EXISTS branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL;
-ALTER TABLE member_groups ADD COLUMN IF NOT EXISTS branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL;
-ALTER TABLE locations     ADD COLUMN IF NOT EXISTS branch_id INTEGER REFERENCES branches(id) ON DELETE SET NULL;
+-- Multi-local columns (safe if the table already exists from old schema).
+ALTER TABLE users         ADD COLUMN IF NOT EXISTS local_id INTEGER REFERENCES locals(id) ON DELETE SET NULL;
+ALTER TABLE members       ADD COLUMN IF NOT EXISTS local_id INTEGER REFERENCES locals(id) ON DELETE SET NULL;
+ALTER TABLE services      ADD COLUMN IF NOT EXISTS local_id INTEGER REFERENCES locals(id) ON DELETE SET NULL;
+ALTER TABLE member_groups ADD COLUMN IF NOT EXISTS local_id INTEGER REFERENCES locals(id) ON DELETE SET NULL;
+ALTER TABLE locations     ADD COLUMN IF NOT EXISTS local_id INTEGER REFERENCES locals(id) ON DELETE SET NULL;
 
 -- Member profile columns (safe if the table already existed from old schema).
 ALTER TABLE members ADD COLUMN IF NOT EXISTS birthday         DATE;
@@ -320,18 +320,18 @@ ALTER TABLE members ADD COLUMN IF NOT EXISTS marital_status  TEXT CHECK (marital
 ALTER TABLE members ADD COLUMN IF NOT EXISTS profession      TEXT;
 ALTER TABLE members ADD COLUMN IF NOT EXISTS residence       TEXT;
 
--- Branch indexes (resolved here in case tables pre-existed).
-CREATE INDEX IF NOT EXISTS users_branch_idx          ON users(branch_id);
-CREATE INDEX IF NOT EXISTS members_branch_idx        ON members(branch_id);
-CREATE INDEX IF NOT EXISTS services_branch_idx       ON services(branch_id);
-CREATE INDEX IF NOT EXISTS member_groups_branch_idx  ON member_groups(branch_id);
-CREATE INDEX IF NOT EXISTS locations_branch_idx      ON locations(branch_id);
+-- Local indexes (resolved here in case tables pre-existed).
+CREATE INDEX IF NOT EXISTS users_local_idx          ON users(local_id);
+CREATE INDEX IF NOT EXISTS members_local_idx        ON members(local_id);
+CREATE INDEX IF NOT EXISTS services_local_idx       ON services(local_id);
+CREATE INDEX IF NOT EXISTS member_groups_local_idx  ON member_groups(local_id);
+CREATE INDEX IF NOT EXISTS locations_local_idx      ON locations(local_id);
 
 -- Promote legacy admins and enforce the new role set.
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 UPDATE users SET role = 'district_admin' WHERE role IN ('admin', 'district_admin');
 ALTER TABLE users ADD CONSTRAINT users_role_check
-  CHECK (role IN ('district_admin', 'branch_admin', 'usher'));
+  CHECK (role IN ('district_admin', 'local_admin', 'usher'));
 
 -- ======================= MEMBER PINS =======================
 -- Four-digit numeric PINs ushers type at the door to mark a member present.
@@ -361,21 +361,26 @@ BEGIN
   END LOOP;
 END $$;
 
--- Joint (all-branches) services: ushers of EVERY branch can mark attendance.
-ALTER TABLE services ADD COLUMN IF NOT EXISTS all_branches BOOLEAN NOT NULL DEFAULT FALSE;
+-- Joint (all-locals) services: ushers of EVERY local can mark attendance.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS all_locals BOOLEAN NOT NULL DEFAULT FALSE;
 
--- Per-branch switch (controlled by the branch admin): when TRUE, ushers of
--- that branch may add new members from their own screen.
-ALTER TABLE branches ADD COLUMN IF NOT EXISTS allow_usher_add_member BOOLEAN NOT NULL DEFAULT FALSE;
+-- Per-local switch (controlled by the local admin): when TRUE, ushers of
+-- that local may add new members from their own screen.
+ALTER TABLE locals ADD COLUMN IF NOT EXISTS allow_usher_add_member BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Manual count of walk-in visitors per service. Total headcount shown in the
 -- UI = members marked present + this number.
 ALTER TABLE services ADD COLUMN IF NOT EXISTS visitor_headcount INTEGER NOT NULL DEFAULT 0
   CHECK (visitor_headcount >= 0);
 
--- Re-point orphaned rows at the default branch.
-UPDATE users         SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;
-UPDATE members       SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;
-UPDATE services      SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;
-UPDATE member_groups SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;
-UPDATE locations     SET branch_id = (SELECT id FROM branches WHERE name = 'Main Branch') WHERE branch_id IS NULL;
+-- Re-point orphaned rows at the default local.
+UPDATE users         SET local_id = (SELECT id FROM locals WHERE name = 'Main Local') WHERE local_id IS NULL;
+UPDATE members       SET local_id = (SELECT id FROM locals WHERE name = 'Main Local') WHERE local_id IS NULL;
+UPDATE services      SET local_id = (SELECT id FROM locals WHERE name = 'Main Local') WHERE local_id IS NULL;
+UPDATE member_groups SET local_id = (SELECT id FROM locals WHERE name = 'Main Local') WHERE local_id IS NULL;
+UPDATE locations     SET local_id = (SELECT id FROM locals WHERE name = 'Main Local') WHERE local_id IS NULL;
+
+
+
+
+

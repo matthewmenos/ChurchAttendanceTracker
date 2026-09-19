@@ -1,28 +1,28 @@
-const express = require('express');
+﻿const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vEmail, vInt, vEnum, vDate } = require('../utils/validate');
-const { authenticate, requireAdmin, getBranchFilter, assertBranchAccess, requireDistrictAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, getLocalFilter, assertLocalAccess, requireDistrictAdmin } = require('../middleware/auth');
 const { generateMemberCode } = require('../utils/codes');
 
 const router = express.Router();
 
 /**
  * Quick member add, used by the usher screen's "+" tab.
- * Ushers may only use this when their branch admin has switched on
- * "allow ushers to add members" for their branch; the new member always
- * joins the usher's own branch. Admins may use it too.
+ * Ushers may only use this when their local admin has switched on
+ * "allow ushers to add members" for their local; the new member always
+ * joins the usher's own local. Admins may use it too.
  * NOTE: registered before the admin-only router.use below on purpose.
  */
 router.post('/quick-add', authenticate, asyncHandler(async (req, res) => {
-  const isAdmin = ['district_admin', 'branch_admin'].includes(req.user.role);
+  const isAdmin = ['district_admin', 'local_admin'].includes(req.user.role);
   if (!isAdmin) {
-    if (!req.user.branch_id) {
+    if (!req.user.local_id) {
       throw new ApiError(403, 'Your account is not assigned to a local, so you cannot add members.');
     }
     const { rows } = await db.query(
-      `SELECT allow_usher_add_member FROM branches WHERE id = $1 AND status = 'active'`,
-      [req.user.branch_id]
+      `SELECT allow_usher_add_member FROM locals WHERE id = $1 AND status = 'active'`,
+      [req.user.local_id]
     );
     if (!rows[0] || !rows[0].allow_usher_add_member) {
       throw new ApiError(403, 'Your local admin has not enabled member sign-up for ushers.');
@@ -43,12 +43,12 @@ router.post('/quick-add', authenticate, asyncHandler(async (req, res) => {
   const notes = vStr(req.body, 'notes', { max: 1000 });
   const age = ageFromBirthday(birthday);
 
-  // Ushers always add to their own branch; admins may pick one.
-  let branchId = req.user.branch_id;
-  if (req.user.role === 'district_admin' && req.body.branchId) {
-    branchId = Number(req.body.branchId);
+  // Ushers always add to their own local; admins may pick one.
+  let localId = req.user.local_id;
+  if (req.user.role === 'district_admin' && req.body.localId) {
+    localId = Number(req.body.localId);
   }
-  if (!branchId) {
+  if (!localId) {
     throw new ApiError(400, 'Cannot add member: no local assigned. Please contact your administrator.');
   }
 
@@ -58,10 +58,10 @@ router.post('/quick-add', authenticate, asyncHandler(async (req, res) => {
   try {
     const memberCode = await generateMemberCode(db);
     const { rows } = await db.query(
-      `INSERT INTO members (full_name, email, phone, birthday, age, gender, membership_type, marital_status, profession, residence, status, notes, branch_id, member_code)
+      `INSERT INTO members (full_name, email, phone, birthday, age, gender, membership_type, marital_status, profession, residence, status, notes, local_id, member_code)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING id`,
-      [fullName, email, phone || null, birthday, age, gender, membershipType, maritalStatus, profession, residence, status, notes || null, branchId, memberCode]
+      [fullName, email, phone || null, birthday, age, gender, membershipType, maritalStatus, profession, residence, status, notes || null, localId, memberCode]
     );
     await setMemberGroups(rows[0].id, groupIds);
     res.status(201).json({ member: cleanMember(await findMember(rows[0].id)) });
@@ -94,13 +94,13 @@ async function findDuplicateMember({ fullName, birthday, phone, excludeId }) {
   const phoneKey = normalizePhone(phone);
   if (!nameKey && !birthdayKey && !phoneKey) return null;
   const { rows } = await db.query(
-    `SELECT m.id, m.full_name, m.phone, m.birthday, m.status, b.name AS branch_name,
+    `SELECT m.id, m.full_name, m.phone, m.birthday, m.status, b.name AS local_name,
             (COALESCE(($1 IS NOT NULL AND lower(regexp_replace(m.full_name, '\\s+', ' ', 'g')) = $1)::int, 0)
            + COALESCE(($2::date IS NOT NULL AND m.birthday = $2::date)::int, 0)
            + COALESCE(($3 IS NOT NULL AND length(regexp_replace(m.phone, '[^0-9]', '', 'g')) >= 7
                         AND right(regexp_replace(m.phone, '[^0-9]', '', 'g'), 9) = $3)::int, 0)) AS matches
        FROM members m
-       LEFT JOIN branches b ON b.id = m.branch_id
+       LEFT JOIN locals b ON b.id = m.local_id
       WHERE m.id <> COALESCE($4, -1)
       ORDER BY matches DESC
       LIMIT 1`,
@@ -114,11 +114,11 @@ async function assertNoDuplicate(input) {
   const dup = await findDuplicateMember(input);
   if (!dup || dup.matches < 2) return;
   const on = matchedCriteria(input, dup);
-  const where = dup.branch_name ? ` in ${dup.branch_name}` : '';
+  const where = dup.local_name ? ` in ${dup.local_name}` : '';
   throw new ApiError(
     409,
     `Possible duplicate: ${dup.full_name} already exists${where} (same ${on.join(' and ')}).`,
-    [{ field: 'duplicate', message: `${dup.full_name}${where} — same ${on.join(' and ')}.` }]
+    [{ field: 'duplicate', message: `${dup.full_name}${where} â€” same ${on.join(' and ')}.` }]
   );
 }
 
@@ -144,7 +144,7 @@ router.get('/check-duplicate', authenticate, asyncHandler(async (req, res) => {
     member: {
       id: dup.id,
       full_name: dup.full_name,
-      branch_name: dup.branch_name || null,
+      local_name: dup.local_name || null,
       status: dup.status,
     },
   });
@@ -175,8 +175,8 @@ function cleanMember(m) {
     full_name: m.full_name,
     email: m.email,
     phone: m.phone,
-    branch_id: m.branch_id ?? null,
-    branch_name: m.branch_name || null,
+    local_id: m.local_id ?? null,
+    local_name: m.local_name || null,
     member_code: m.member_code || null,
     birthday: m.birthday || null,
     age: m.age || null,
@@ -198,14 +198,14 @@ function cleanMember(m) {
 
 async function findMember(id) {
   const { rows } = await db.query(
-    `SELECT m.*, b.name AS branch_name, COALESCE((
+    `SELECT m.*, b.name AS local_name, COALESCE((
          SELECT json_agg(json_build_object('id', g.id, 'name', g.name) ORDER BY g.name)
            FROM member_group_assignments mga
            JOIN member_groups g ON g.id = mga.group_id
           WHERE mga.member_id = m.id
        ), '[]'::json) AS groups
        FROM members m
-       LEFT JOIN branches b ON b.id = m.branch_id
+       LEFT JOIN locals b ON b.id = m.local_id
       WHERE m.id = $1`,
     [id]
   );
@@ -252,11 +252,11 @@ router.get('/', asyncHandler(async (req, res) => {
   const where = [];
   const params = [];
   
-  // Branch filtering
-  const branchId = getBranchFilter(req);
-  if (branchId) {
-    params.push(branchId);
-    where.push(`m.branch_id = $${params.length}`);
+  // Local filtering
+  const localId = getLocalFilter(req);
+  if (localId) {
+    params.push(localId);
+    where.push(`m.local_id = $${params.length}`);
   }
   
   if (search) {
@@ -312,12 +312,12 @@ router.post('/', asyncHandler(async (req, res) => {
   const notes = vStr(req.body, 'notes', { max: 1000 });
   const age = ageFromBirthday(birthday);
 
-  // Determine branch_id - use user's branch or allow district admin to specify
-  let branchId = req.user.branch_id;
-  if (req.user.role === 'district_admin' && req.body.branchId) {
-    branchId = Number(req.body.branchId);
+  // Determine local_id - use user's local or allow district admin to specify
+  let localId = req.user.local_id;
+  if (req.user.role === 'district_admin' && req.body.localId) {
+    localId = Number(req.body.localId);
   }
-  if (!branchId) {
+  if (!localId) {
     throw new ApiError(400, 'Cannot create member: no local assigned. Please contact your administrator.');
   }
 
@@ -328,10 +328,10 @@ router.post('/', asyncHandler(async (req, res) => {
     // Every member gets a short door code for quick attendance marking.
     const memberCode = await generateMemberCode(db);
     const { rows } = await db.query(
-      `INSERT INTO members (full_name, email, phone, birthday, age, gender, membership_type, marital_status, profession, residence, status, notes, branch_id, member_code)
+      `INSERT INTO members (full_name, email, phone, birthday, age, gender, membership_type, marital_status, profession, residence, status, notes, local_id, member_code)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING id`,
-      [fullName, email, phone, birthday, age, gender, membershipType, maritalStatus, profession, residence, status, notes, branchId, memberCode]
+      [fullName, email, phone, birthday, age, gender, membershipType, maritalStatus, profession, residence, status, notes, localId, memberCode]
     );
     await setMemberGroups(rows[0].id, groupIds);
     res.status(201).json({ member: cleanMember(await findMember(rows[0].id)) });
@@ -345,9 +345,9 @@ router.get('/:id', asyncHandler(async (req, res) => {
   const member = await findMember(Number(req.params.id));
   if (!member) throw new ApiError(404, 'Member not found.');
   
-  // Check branch access
-  const branchId = getBranchFilter(req);
-  if (branchId && member.branch_id !== branchId) {
+  // Check local access
+  const localId = getLocalFilter(req);
+  if (localId && member.local_id !== localId) {
     throw new ApiError(403, 'You do not have access to this member.');
   }
   
@@ -359,9 +359,9 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const existing = await findMember(id);
   if (!existing) throw new ApiError(404, 'Member not found.');
   
-  // Check branch access
-  const branchId = getBranchFilter(req);
-  if (branchId && existing.branch_id !== branchId) {
+  // Check local access
+  const localId = getLocalFilter(req);
+  if (localId && existing.local_id !== localId) {
     throw new ApiError(403, 'You do not have access to this member.');
   }
 
@@ -405,7 +405,7 @@ router.patch('/:id/status', asyncHandler(async (req, res) => {
   const status = vEnum(req.body, 'status', ['active', 'inactive'], { required: true });
   const existing = await findMember(id);
   if (!existing) throw new ApiError(404, 'Member not found.');
-  assertBranchAccess(req.user, existing.branch_id);
+  assertLocalAccess(req.user, existing.local_id);
   await db.query('UPDATE members SET status = $1 WHERE id = $2', [status, id]);
   res.json({ member: cleanMember(await findMember(id)) });
 }));
@@ -414,7 +414,7 @@ router.get('/:id/attendance', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const member = await findMember(id);
   if (!member) throw new ApiError(404, 'Member not found.');
-  assertBranchAccess(req.user, member.branch_id);
+  assertLocalAccess(req.user, member.local_id);
 
   const { rows: items } = await db.query(
     `SELECT a.id, a.status, a.notes, a.recorded_at, a.updated_at,
@@ -448,7 +448,7 @@ router.post('/:id/regenerate-code', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const member = await findMember(id);
   if (!member) throw new ApiError(404, 'Member not found.');
-  assertBranchAccess(req.user, member.branch_id);
+  assertLocalAccess(req.user, member.local_id);
 
   const code = await generateMemberCode(db);
   await db.query('UPDATE members SET member_code = $1 WHERE id = $2', [code, id]);
@@ -456,28 +456,29 @@ router.post('/:id/regenerate-code', asyncHandler(async (req, res) => {
 }));
 
 /**
- * Move a member to another branch (district admin only).
- * Attendance history is kept; future marking happens at the new branch.
+ * Move a member to another local (district admin only).
+ * Attendance history is kept; future marking happens at the new local.
  */
 router.post('/:id/transfer', requireDistrictAdmin, asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const member = await findMember(id);
   if (!member) throw new ApiError(404, 'Member not found.');
 
-  const branchId = vInt(req.body, 'branchId', { required: true, label: 'Branch' });
-  const { rows: branchRows } = await db.query(
-    `SELECT id, name FROM branches WHERE id = $1 AND status = 'active'`, [branchId]);
-  if (!branchRows.length) {
+  const localId = vInt(req.body, 'localId', { required: true, label: 'Local' });
+  const { rows: localRows } = await db.query(
+    `SELECT id, name FROM locals WHERE id = $1 AND status = 'active'`, [localId]);
+  if (!localRows.length) {
     throw new ApiError(400, 'Invalid or inactive local.', [
-      { field: 'branchId', message: 'Unknown local.' },
+      { field: 'localId', message: 'Unknown local.' },
     ]);
   }
-  if (member.branch_id === branchId) {
+  if (member.local_id === localId) {
     throw new ApiError(400, 'The member already belongs to this local.');
   }
 
-  await db.query('UPDATE members SET branch_id = $1 WHERE id = $2', [branchId, id]);
-  res.json({ member: cleanMember(await findMember(id)), transferred_to: branchRows[0].name });
+  await db.query('UPDATE members SET local_id = $1 WHERE id = $2', [localId, id]);
+  res.json({ member: cleanMember(await findMember(id)), transferred_to: localRows[0].name });
 }));
 
 module.exports = router;
+

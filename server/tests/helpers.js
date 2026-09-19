@@ -1,4 +1,4 @@
-process.env.NODE_ENV = 'test';
+﻿process.env.NODE_ENV = 'test';
 
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
@@ -13,11 +13,11 @@ async function resetTables() {
   );
 }
 
-async function createUser({ name = 'Test User', email, password = 'Passw0rd!', role = 'usher', status = 'active', branchId = null } = {}) {
+async function createUser({ name = 'Test User', email, password = 'Passw0rd!', role = 'usher', status = 'active', localId = null } = {}) {
   const hash = await bcrypt.hash(password, 4);
   const { rows } = await db.query(
-    'INSERT INTO users (name, email, password_hash, role, status, branch_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-    [name, email, hash, role, status, branchId]
+    'INSERT INTO users (name, email, password_hash, role, status, local_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    [name, email, hash, role, status, localId]
   );
   return rows[0];
 }
@@ -36,18 +36,18 @@ async function loginAs(email, password = 'Passw0rd!') {
 }
 
 async function seedBase() {
-  const { rows: branchRows } = await db.query(`INSERT INTO branches (name) VALUES ('Test Branch') RETURNING id`);
-  const branchId = branchRows[0].id;
-  const admin = await createUser({ name: 'Admin', email: 'admin@test.app', role: 'district_admin', branchId });
-  const usher = await createUser({ name: 'Usher One', email: 'usher@test.app', role: 'usher', branchId });
+  const { rows: localRows } = await db.query(`INSERT INTO locals (name) VALUES ('Test Local') RETURNING id`);
+  const localId = localRows[0].id;
+  const admin = await createUser({ name: 'Admin', email: 'admin@test.app', role: 'district_admin', localId });
+  const usher = await createUser({ name: 'Usher One', email: 'usher@test.app', role: 'usher', localId });
   const g = await db.query("INSERT INTO member_groups (name) VALUES ('Choir') RETURNING *");
   const m = await db.query(
-    `INSERT INTO members (full_name, email, branch_id) VALUES
+    `INSERT INTO members (full_name, email, local_id) VALUES
        ('Alice Johnson', 'alice@test.app', $1),
        ('Brian Smith', NULL, $1),
        ('Cynthia Lee', NULL, $1)
      RETURNING *`,
-    [branchId]
+    [localId]
   );
   // Alice and Brian belong to the Choir (multi-group supported).
   for (const row of m.rows.slice(0, 2)) {
@@ -59,10 +59,10 @@ async function seedBase() {
   const today = new Date();
   const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const s = await db.query(
-    "INSERT INTO services (service_date, service_name, start_time, branch_id) VALUES ($1, 'Sunday Service', '09:30', $2) RETURNING *",
-    [dateStr, branchId]
+    "INSERT INTO services (service_date, service_name, start_time, local_id) VALUES ($1, 'Sunday Service', '09:30', $2) RETURNING *",
+    [dateStr, localId]
   );
-  return { admin, usher, branchId, group: g.rows[0], members: m.rows, service: s.rows[0] };
+  return { admin, usher, localId, group: g.rows[0], members: m.rows, service: s.rows[0] };
 }
 
 function getCookie(res, name) {
@@ -76,3 +76,4 @@ function getCookie(res, name) {
 }
 
 module.exports = { app, db, resetTables, createUser, agent, loginAs, seedBase, getCookie };
+

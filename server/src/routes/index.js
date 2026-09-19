@@ -36,7 +36,7 @@ router.get('/branding', async (req, res) => {
 });
 router.use('/auth', require('./auth'));
 router.use('/users', require('./users'));
-router.use('/branches', require('./branches'));
+router.use('/locals', require('./locals'));
 router.use('/members', require('./members'));
 router.use('/services', require('./services'));
 router.use('/attendance', require('./attendance'));

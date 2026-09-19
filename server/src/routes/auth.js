@@ -57,11 +57,11 @@ function clearAuthCookies(res) {
 async function loadPublicUser(id) {
   const { rows } = await db.query(
     `SELECT u.id, u.name, u.email, u.username, u.role, u.status, u.must_change_password, u.last_login_at,
-            u.branch_id, b.name AS branch_name, COALESCE(b.allow_usher_add_member, FALSE) AS branch_allows_member_add,
+            u.local_id, b.name AS local_name, COALESCE(b.allow_usher_add_member, FALSE) AS local_allows_member_add,
             (SELECT value FROM settings WHERE key = 'church_name') AS church_name,
             (SELECT value FROM settings WHERE key = 'logo') AS logo
        FROM users u
-       LEFT JOIN branches b ON b.id = u.branch_id
+       LEFT JOIN locals b ON b.id = u.local_id
       WHERE u.id = $1`,
     [id]
   );
@@ -76,9 +76,9 @@ async function loadPublicUser(id) {
     status: u.status,
     must_change_password: u.must_change_password,
     last_login_at: u.last_login_at,
-    branch_id: u.branch_id,
-    branch_name: u.branch_name || null,
-    branch_allows_member_add: !!u.branch_allows_member_add,
+    local_id: u.local_id,
+    local_name: u.local_name || null,
+    local_allows_member_add: !!u.local_allows_member_add,
     churchName: u.church_name || 'Church Attendance Tracker',
     logo: u.logo || '',
   };

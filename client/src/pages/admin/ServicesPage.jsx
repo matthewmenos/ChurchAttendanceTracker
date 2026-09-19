@@ -28,15 +28,15 @@ function toLocalDT(ts) {
 
 export default function ServicesPage() {
   const toast = useToast();
-  const { user, branches, currentBranchId } = useAuth();
+  const { user, locals, currentLocalId } = useAuth();
   const isDistrict = !!user && user.role === 'district_admin';
   const [tab, setTab] = useState('upcoming');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
-  // Joint checkbox state drives the branch field: a joint service belongs to
-  // no branch, so the branch picker is disabled while it is ticked.
+  // Joint checkbox state drives the local field: a joint service belongs to
+  // no local, so the local picker is disabled while it is ticked.
   const [jointChecked, setJointChecked] = useState(false);
 
   useEffect(() => {
@@ -57,7 +57,7 @@ export default function ServicesPage() {
 
   const openEdit = (service) => {
     setEditing(service);
-    setJointChecked(!!(service && service.all_branches));
+    setJointChecked(!!(service && service.all_locals));
     setFormError('');
     setFormOpen(true);
   };
@@ -72,10 +72,10 @@ export default function ServicesPage() {
       locationId: form.get('locationId') ? Number(form.get('locationId')) : null,
       attendanceCloseTime: form.get('attendanceCloseTime') || null,
       notes: form.get('notes'),
-      // Joint services belong to no branch — the server clears branch_id;
-      // regular district-admin services carry the picked branch.
-      branchId: isDistrict ? (jointChecked ? null : (form.get('branchId') ? Number(form.get('branchId')) : undefined)) : undefined,
-      allBranches: isDistrict ? jointChecked : undefined,
+      // Joint services belong to no local — the server clears local_id;
+      // regular district-admin services carry the picked local.
+      localId: isDistrict ? (jointChecked ? null : (form.get('localId') ? Number(form.get('localId')) : undefined)) : undefined,
+      allLocals: isDistrict ? jointChecked : undefined,
       // Manual walk-in visitor count; total present = members present + this.
       visitorHeadcount: form.get('visitorHeadcount') === '' ? 0 : Number(form.get('visitorHeadcount')) || 0,
     };
@@ -131,7 +131,7 @@ export default function ServicesPage() {
             getRowKey={(r) => r.id}
             columns={[
               { key: 'service_date', label: 'Date', render: (r) => (<span><strong>{formatShortDate(r.service_date)}</strong><span className='muted small block'>{formatDate(r.service_date).split(', ').pop()}</span></span>) },
-              { key: 'service_name', label: 'Service', render: (r) => (<span><Link to={`/admin/services/${r.id}`} className='row-title'>{r.service_name}</Link>{r.all_branches ? <span> <Badge variant='info'>All locals</Badge></span> : null}</span>) },
+              { key: 'service_name', label: 'Service', render: (r) => (<span><Link to={`/admin/services/${r.id}`} className='row-title'>{r.service_name}</Link>{r.all_locals ? <span> <Badge variant='info'>All locals</Badge></span> : null}</span>) },
               { key: 'start_time', label: 'Time', render: (r) => (r.start_time ? formatTime(r.start_time) : '—') },
               { key: 'location_name', label: 'Location', render: (r) => r.location_name || '—' },
               { key: 'total_present', label: 'Total present', className: 'num', render: (r) => String(r.total_present ?? r.present ?? 0) },
@@ -185,19 +185,19 @@ export default function ServicesPage() {
           {isDistrict && (
             <Field
               label='Local'
-              id='sv-branch'
+              id='sv-local'
               required={!jointChecked && !editing}
               hint={jointChecked ? 'Joint services belong to no local — the picker is disabled.' : (editing ? 'You can move this service to another local.' : 'Every service belongs to a local.')}
             >
               <Select
-                id='sv-branch'
-                name='branchId'
+                id='sv-local'
+                name='localId'
                 required={!jointChecked && !editing}
                 disabled={jointChecked}
-                defaultValue={editing && editing.branch_id ? String(editing.branch_id) : (currentBranchId ? String(currentBranchId) : '')}
+                defaultValue={editing && editing.local_id ? String(editing.local_id) : (currentLocalId ? String(currentLocalId) : '')}
               >
                 <option value=''>Choose a local…</option>
-                {branches.map((b) => (
+                {locals.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </Select>
@@ -206,13 +206,13 @@ export default function ServicesPage() {
           {isDistrict && (
             <Field
               label='Joint service'
-              id='sv-all-branches'
+              id='sv-all-locals'
               hint='Tick when all locals gather (e.g. combined service). The service then belongs to no local — ushers of every local can record attendance, and the roster includes every local’s members.'
             >
               <label className='checkbox' style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input
-                  id='sv-all-branches'
-                  name='allBranches'
+                  id='sv-all-locals'
+                  name='allLocals'
                   type='checkbox'
                   checked={jointChecked}
                   onChange={(e) => setJointChecked(e.target.checked)}

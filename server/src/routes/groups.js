@@ -1,22 +1,22 @@
-const express = require('express');
+﻿const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr } = require('../utils/validate');
-const { authenticate, requireAdmin, getBranchFilter } = require('../middleware/auth');
+const { authenticate, requireAdmin, getLocalFilter } = require('../middleware/auth');
 
 const router = express.Router();
 
 // Reading groups is needed by ushers for the roster filter.
 router.get('/', authenticate, asyncHandler(async (req, res) => {
-  const branchId = getBranchFilter(req);
+  const localId = getLocalFilter(req);
   
   let query = `SELECT g.*, (SELECT COUNT(*) FROM member_group_assignments mga WHERE mga.group_id = g.id) AS member_count
                  FROM member_groups g`;
   const params = [];
   
-  if (branchId) {
-    params.push(branchId);
-    query += ` WHERE g.branch_id = $1`;
+  if (localId) {
+    params.push(localId);
+    query += ` WHERE g.local_id = $1`;
   }
   
   query += ` ORDER BY g.name ASC`;
@@ -30,20 +30,20 @@ router.post('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const leaderName = vStr(req.body, 'leaderName', { max: 120 });
   const description = vStr(req.body, 'description', { max: 300 });
   
-  // Determine branch_id
-  let branchId = req.user.branch_id;
-  if (req.user.role === 'district_admin' && req.body.branchId) {
-    branchId = Number(req.body.branchId);
+  // Determine local_id
+  let localId = req.user.local_id;
+  if (req.user.role === 'district_admin' && req.body.localId) {
+    localId = Number(req.body.localId);
   }
-  if (!branchId) {
+  if (!localId) {
     throw new ApiError(400, 'Cannot create group: no local assigned.');
   }
   
-  const dup = await db.query('SELECT id FROM member_groups WHERE lower(name) = $1 AND branch_id = $2', [name.toLowerCase(), branchId]);
+  const dup = await db.query('SELECT id FROM member_groups WHERE lower(name) = $1 AND local_id = $2', [name.toLowerCase(), localId]);
   if (dup.rows.length) throw new ApiError(409, 'A group with this name already exists in this local.');
   const { rows } = await db.query(
-    'INSERT INTO member_groups (name, leader_name, description, branch_id) VALUES ($1, $2, $3, $4) RETURNING *',
-    [name, leaderName, description, branchId]
+    'INSERT INTO member_groups (name, leader_name, description, local_id) VALUES ($1, $2, $3, $4) RETURNING *',
+    [name, leaderName, description, localId]
   );
   res.status(201).json({ item: rows[0] });
 }));
@@ -71,3 +71,4 @@ router.delete('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) 
 }));
 
 module.exports = router;
+

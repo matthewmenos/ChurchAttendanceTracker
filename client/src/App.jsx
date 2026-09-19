@@ -16,7 +16,7 @@ import FollowUpsPage from './pages/admin/FollowUpsPage.jsx';
 import UsersPage from './pages/admin/UsersPage.jsx';
 import SettingsPage from './pages/admin/SettingsPage.jsx';
 import VisitorsPage from './pages/admin/VisitorsPage.jsx';
-import BranchesPage from './pages/admin/BranchesPage.jsx';
+import LocalsPage from './pages/admin/LocalsPage.jsx';
 import UsherHomePage from './pages/usher/UsherHomePage.jsx';
 import UsherMarkPage from './pages/usher/UsherMarkPage.jsx';
 import UsherVisitorsPage from './pages/usher/UsherVisitorsPage.jsx';
@@ -32,7 +32,7 @@ export default function App() {
       <Route path="/" element={<RoleRedirect />} />
 
       <Route element={<RequireAuth />}>
-        <Route element={<RequireRole allow={['district_admin', 'branch_admin']} />}>
+        <Route element={<RequireRole allow={['district_admin', 'local_admin']} />}>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<OverviewPage />} />
             <Route path="attendance" element={<AttendancePage />} />
@@ -45,12 +45,12 @@ export default function App() {
             <Route path="visitors" element={<VisitorsPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path='settings' element={<SettingsPage />} />
-            <Route path='branches' element={<BranchesPage />} />
+            <Route path='locals' element={<LocalsPage />} />
           </Route>
         </Route>
 
         {/* Admins may also help record attendance; ushers see only this area. */}
-        <Route element={<RequireRole allow={['district_admin', 'branch_admin', 'usher']} />}>
+        <Route element={<RequireRole allow={['district_admin', 'local_admin', 'usher']} />}>
           <Route path="/usher" element={<UsherLayout />}>
             <Route index element={<UsherHomePage />} />
             <Route path="mark/:serviceId" element={<UsherMarkPage />} />

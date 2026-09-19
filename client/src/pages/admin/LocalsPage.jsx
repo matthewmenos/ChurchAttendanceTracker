@@ -10,7 +10,7 @@ import { IconUsers } from '../../components/ui/icons.jsx';
 
 const EMPTY_FORM = { name: '', description: '', location: '', contactPhone: '', contactEmail: '' };
 
-export default function BranchesPage() {
+export default function LocalsPage() {
   const toast = useToast();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -22,7 +22,7 @@ export default function BranchesPage() {
     document.title = 'Locals — Church Attendance Tracker';
   }, []);
 
-  const listQ = useFetch(() => api('/branches'), []);
+  const listQ = useFetch(() => api('/locals'), []);
 
   const openCreate = () => {
     setEditing(null);
@@ -30,17 +30,17 @@ export default function BranchesPage() {
     setFormOpen(true);
   };
 
-  const openEdit = (branch) => {
-    setEditing(branch);
+  const openEdit = (local) => {
+    setEditing(local);
     setFormError('');
     setFormOpen(true);
   };
 
-  const openDelete = (branch) => {
-    setConfirmDelete(branch);
+  const openDelete = (local) => {
+    setConfirmDelete(local);
   };
 
-  const saveBranch = async (e) => {
+  const saveLocal = async (e) => {
     e.preventDefault();
     const form = new FormData(e.target);
     const payload = {
@@ -56,10 +56,10 @@ export default function BranchesPage() {
 
     try {
       if (editing) {
-        await api(`/branches/${editing.id}`, { method: 'PUT', body: payload });
+        await api(`/locals/${editing.id}`, { method: 'PUT', body: payload });
         toast('Local updated.');
       } else {
-        await api('/branches', { method: 'POST', body: payload });
+        await api('/locals', { method: 'POST', body: payload });
         toast('Local created.');
       }
       setFormOpen(false);
@@ -71,10 +71,10 @@ export default function BranchesPage() {
     }
   };
 
-  const deleteBranch = async () => {
+  const deleteLocal = async () => {
     if (!confirmDelete) return;
     try {
-      await api(`/branches/${confirmDelete.id}`, { method: 'DELETE' });
+      await api(`/locals/${confirmDelete.id}`, { method: 'DELETE' });
       toast('Local deactivated.');
       listQ.reload();
     } catch (err) {
@@ -146,7 +146,7 @@ export default function BranchesPage() {
         </div>
       )}
       <Modal open={formOpen} title={editing ? 'Edit Local' : 'Add Local'} onClose={() => setFormOpen(false)}>
-        <form onSubmit={saveBranch}>
+        <form onSubmit={saveLocal}>
           {formError && <Alert variant="error">{formError}</Alert>}
           <Field label="Name" id="b-name"><Input id="b-name" name="name" defaultValue={editing?.name || ''} required /></Field>
           <Field label="Location" id="b-loc"><Input id="b-loc" name="location" defaultValue={editing?.location || ''} /></Field>
@@ -165,7 +165,7 @@ export default function BranchesPage() {
           </div>
         </form>
       </Modal>
-      <ConfirmDialog open={!!confirmDelete} title="Delete local?" message={`Are you sure you want to delete "${confirmDelete?.name}"?`} confirmLabel="Delete" danger onConfirm={deleteBranch} onCancel={() => setConfirmDelete(null)} />
+      <ConfirmDialog open={!!confirmDelete} title="Delete local?" message={`Are you sure you want to delete "${confirmDelete?.name}"?`} confirmLabel="Delete" danger onConfirm={deleteLocal} onCancel={() => setConfirmDelete(null)} />
     </div>
   );
 }

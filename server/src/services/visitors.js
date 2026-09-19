@@ -1,4 +1,4 @@
-const db = require('../config/db');
+﻿const db = require('../config/db');
 const { ApiError } = require('../utils/errors');
 const { getSettingsMap } = require('./settings');
 const { isArkaselConfigured, sendViaArkasel, renderTemplate } = require('./sms');
@@ -74,20 +74,20 @@ async function recordVisit(visitorId, serviceId, recordedBy) {
   );
 }
 
-async function listVisitors({ serviceId, createdBy, branchId, followupStatus, search, page = 1, pageSize = 20 }) {
+async function listVisitors({ serviceId, createdBy, localId, followupStatus, search, page = 1, pageSize = 20 }) {
   const where = [];
   const params = [];
   if (serviceId) { params.push(serviceId); where.push(`v.service_id = $${params.length}`); }
   if (createdBy) { params.push(createdBy); where.push(`v.created_by = $${params.length}`); }
-  // Mirrors convertToMember(): a visitor belongs to the branch of the service
-  // they attended, or - when the visit had no service - to the branch of the
+  // Mirrors convertToMember(): a visitor belongs to the local of the service
+  // they attended, or - when the visit had no service - to the local of the
   // user who captured them. The same predicate feeds the COUNT query below.
-  if (branchId) {
-    params.push(branchId);
+  if (localId) {
+    params.push(localId);
     const n = params.length;
     where.push(
-      `(v.service_id IN (SELECT id FROM services WHERE branch_id = $${n})
-        OR (v.service_id IS NULL AND v.created_by IN (SELECT id FROM users WHERE branch_id = $${n})))`
+      `(v.service_id IN (SELECT id FROM services WHERE local_id = $${n})
+        OR (v.service_id IS NULL AND v.created_by IN (SELECT id FROM users WHERE local_id = $${n})))`
     );
   }
   if (followupStatus) { params.push(followupStatus); where.push(`v.followup_status = $${params.length}`); }
@@ -144,23 +144,23 @@ async function convertToMember(visitorId) {
   const v = await findVisitor(visitorId);
   if (!v) throw new ApiError(404, 'Visitor not found.');
   if (v.converted_member_id) return { visitor: v, member_id: v.converted_member_id, alreadyConverted: true };
-  // New member joins the branch of the service they visited (or the
-  // capturing user's branch when the visit had no service).
+  // New member joins the local of the service they visited (or the
+  // capturing user's local when the visit had no service).
   const { rows: bRows } = await db.query(
-    `SELECT COALESCE(s.branch_id, u.branch_id) AS branch_id
+    `SELECT COALESCE(s.local_id, u.local_id) AS local_id
        FROM visitors v
        LEFT JOIN services s ON s.id = v.service_id
        LEFT JOIN users u ON u.id = v.created_by
       WHERE v.id = $1`,
     [visitorId]
   );
-  const branchId = (bRows[0] && bRows[0].branch_id) || null;
+  const localId = (bRows[0] && bRows[0].local_id) || null;
   const memberCode = await generateMemberCode(db);
   const { rows } = await db.query(
-    `INSERT INTO members (full_name, phone, email, gender, status, notes, branch_id, member_code)
+    `INSERT INTO members (full_name, phone, email, gender, status, notes, local_id, member_code)
      VALUES ($1, $2, $3, $4, 'active', $5, $6, $7)
      RETURNING id`,
-    [v.full_name, v.phone || null, v.email || null, v.gender || null, v.notes || null, branchId, memberCode]
+    [v.full_name, v.phone || null, v.email || null, v.gender || null, v.notes || null, localId, memberCode]
   );
   const memberId = rows[0].id;
   await db.query(
@@ -170,12 +170,12 @@ async function convertToMember(visitorId) {
   return { visitor: await findVisitor(visitorId), member_id: memberId, alreadyConverted: false };
 }
 
-async function visitorStats({ from, to, branchId } = {}) {
+async function visitorStats({ from, to, localId } = {}) {
   const where = [];
   const params = [];
   if (from) { params.push(from); where.push(`s.service_date >= $${params.length}`); }
   if (to) { params.push(to); where.push(`s.service_date <= $${params.length}`); }
-  if (branchId) { params.push(branchId); where.push(`s.branch_id = $${params.length}`); }
+  if (localId) { params.push(localId); where.push(`s.local_id = $${params.length}`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const { rows } = await db.query(
     `SELECT s.id, s.service_name, s.service_date,

@@ -24,7 +24,7 @@ function calcAge(bd) {
 /** Builds the yellow duplicate warning shown above the form fields. */
 function DuplicateWarning({ member, matchedOn }) {
   if (!member) return null;
-  const where = member.branch_name ? ` in ${member.branch_name}` : '';
+  const where = member.local_name ? ` in ${member.local_name}` : '';
   return (
     <Alert variant='warning' title='Possible duplicate member'>
       <span>
@@ -35,9 +35,9 @@ function DuplicateWarning({ member, matchedOn }) {
   );
 }
 
-/** Usher screen for signing up a new member (branch-admin enabled).
- *  Mirrors the admin member form - all fields, minus the branch picker
- *  (the member always joins the usher's own branch). */
+/** Usher screen for signing up a new member (local-admin enabled).
+ *  Mirrors the admin member form - all fields, minus the local picker
+ *  (the member always joins the usher's own local). */
 export default function UsherAddMemberPage() {
   const toast = useToast();
   const navigate = useNavigate();

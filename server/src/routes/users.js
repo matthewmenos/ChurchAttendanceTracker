@@ -1,9 +1,9 @@
-const express = require('express');
+﻿const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vEmail, vStr, vEnum, vInt } = require('../utils/validate');
 const { hashPassword, generateTempPassword } = require('../utils/passwords');
-const { authenticate, requireAdmin, getBranchFilter } = require('../middleware/auth');
+const { authenticate, requireAdmin, getLocalFilter } = require('../middleware/auth');
 const { sha256 } = require('../utils/tokens');
 
 const router = express.Router();
@@ -19,8 +19,8 @@ function cleanUser(u) {
     phone: u.phone,
     role: u.role,
     status: u.status,
-    branch_id: u.branch_id,
-    branch_name: u.branch_name || null,
+    local_id: u.local_id,
+    local_name: u.local_name || null,
     must_change_password: u.must_change_password,
     last_login_at: u.last_login_at,
     created_by_name: u.created_by_name || null,
@@ -31,11 +31,11 @@ function cleanUser(u) {
 
 async function findUser(id) {
   const { rows } = await db.query(
-    `SELECT u.*, c.name AS created_by_name, b.name AS branch_name,
+    `SELECT u.*, c.name AS created_by_name, b.name AS local_name,
             (SELECT COUNT(*) FROM attendance a WHERE a.recorded_by_user_id = u.id) AS records_created
        FROM users u
        LEFT JOIN users c ON c.id = u.created_by
-       LEFT JOIN branches b ON b.id = u.branch_id
+       LEFT JOIN locals b ON b.id = u.local_id
       WHERE u.id = $1`,
     [id]
   );
@@ -60,31 +60,31 @@ async function checkUsername(raw, currentId = null) {
   return value;
 }
 router.get('/', asyncHandler(async (req, res) => {
-  const branchFilter = getBranchFilter(req);
+  const localFilter = getLocalFilter(req);
   
-  let query = `SELECT u.*, c.name AS created_by_name, b.name AS branch_name,
+  let query = `SELECT u.*, c.name AS created_by_name, b.name AS local_name,
             (SELECT COUNT(*) FROM attendance a WHERE a.recorded_by_user_id = u.id) AS records_created
          FROM users u
          LEFT JOIN users c ON c.id = u.created_by
-         LEFT JOIN branches b ON b.id = u.branch_id`;
+         LEFT JOIN locals b ON b.id = u.local_id`;
   
   const params = [];
   const conditions = [];
   
-  // Filter by branch for non-district admins
-  if (req.user.role !== 'district_admin' && req.user.branch_id) {
-    conditions.push(`u.branch_id = $${params.length + 1}`);
-    params.push(req.user.branch_id);
-  } else if (req.query.branchId) {
-    conditions.push(`u.branch_id = $${params.length + 1}`);
-    params.push(Number(req.query.branchId));
+  // Filter by local for non-district admins
+  if (req.user.role !== 'district_admin' && req.user.local_id) {
+    conditions.push(`u.local_id = $${params.length + 1}`);
+    params.push(req.user.local_id);
+  } else if (req.query.localId) {
+    conditions.push(`u.local_id = $${params.length + 1}`);
+    params.push(Number(req.query.localId));
   }
   
   if (conditions.length > 0) {
     query += ` WHERE ${conditions.join(' AND ')}`;
   }
   
-  query += ` ORDER BY CASE u.role WHEN 'district_admin' THEN 0 WHEN 'branch_admin' THEN 1 ELSE 2 END, u.name ASC`;
+  query += ` ORDER BY CASE u.role WHEN 'district_admin' THEN 0 WHEN 'local_admin' THEN 1 ELSE 2 END, u.name ASC`;
   
   const { rows } = await db.query(query, params);
   res.json({ items: rows.map(cleanUser), total: rows.length });
@@ -94,42 +94,42 @@ router.post('/', asyncHandler(async (req, res) => {
   const name = vStr(req.body, 'name', { required: true, max: 120, label: 'Full name' });
   const email = vEmail(req.body, 'email', { required: true });
   const phone = vStr(req.body, 'phone', { max: 40 });
-  const role = vEnum(req.body, 'role', ['district_admin', 'branch_admin', 'usher']) || 'usher';
-  let branchId = vInt(req.body, 'branchId');
+  const role = vEnum(req.body, 'role', ['district_admin', 'local_admin', 'usher']) || 'usher';
+  let localId = vInt(req.body, 'localId');
 
-  // Branch admins always operate inside their own branch: when the client
-  // doesn't send a branchId we default to theirs, and any other value is
-  // rejected (they may not place ushers in another branch).
-  if (req.user.role === 'branch_admin') {
-    if (!branchId) branchId = req.user.branch_id || null;
-    if (!branchId) {
+  // Local admins always operate inside their own local: when the client
+  // doesn't send a localId we default to theirs, and any other value is
+  // rejected (they may not place ushers in another local).
+  if (req.user.role === 'local_admin') {
+    if (!localId) localId = req.user.local_id || null;
+    if (!localId) {
       throw new ApiError(400, 'Your account has no local assigned. Ask a district admin to set your local first.');
     }
-    if (branchId !== req.user.branch_id) {
+    if (localId !== req.user.local_id) {
       throw new ApiError(403, 'You can only create users in your own local.');
     }
   }
 
-  // Validate branch_id based on role
-  if (role === 'district_admin' && branchId) {
+  // Validate local_id based on role
+  if (role === 'district_admin' && localId) {
     throw new ApiError(400, 'District admin should not be assigned to a local.');
   }
-  if ((role === 'branch_admin' || role === 'usher') && !branchId) {
+  if ((role === 'local_admin' || role === 'usher') && !localId) {
     throw new ApiError(400, 'Local admin and usher must be assigned to a local.');
   }
 
-  // Verify branch exists
-  if (branchId) {
-    const branchCheck = await db.query(`SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [branchId]);
-    if (!branchCheck.rows.length) throw new ApiError(400, 'Invalid or inactive local.');
+  // Verify local exists
+  if (localId) {
+    const localCheck = await db.query(`SELECT id FROM locals WHERE id = $1 AND status = 'active'`, [localId]);
+    if (!localCheck.rows.length) throw new ApiError(400, 'Invalid or inactive local.');
   }
 
-  // Branch admins manage ushers within their own branch only.
-  if (req.user.role === 'branch_admin') {
+  // Local admins manage ushers within their own local only.
+  if (req.user.role === 'local_admin') {
     if (role !== 'usher') {
       throw new ApiError(403, 'Local admins can only create usher accounts.');
     }
-    if (branchId !== req.user.branch_id) {
+    if (localId !== req.user.local_id) {
       throw new ApiError(403, 'You can only create users in your own local.');
     }
   }
@@ -142,10 +142,10 @@ router.post('/', asyncHandler(async (req, res) => {
   const temporaryPassword = generateTempPassword();
   const hash = await hashPassword(temporaryPassword);
   const { rows } = await db.query(
-    `INSERT INTO users (name, email, phone, username, password_hash, role, must_change_password, created_by, branch_id)
+    `INSERT INTO users (name, email, phone, username, password_hash, role, must_change_password, created_by, local_id)
      VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $8)
      RETURNING id`,
-    [name, email, phone, username, hash, role, req.user.id, branchId || null]
+    [name, email, phone, username, hash, role, req.user.id, localId || null]
   );
   const user = await findUser(rows[0].id);
   res.status(201).json({ user: cleanUser(user), temporaryPassword });
@@ -156,12 +156,12 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const existing = await findUser(id);
   if (!existing) throw new ApiError(404, 'User not found.');
 
-  // Branch admins manage ushers in their own branch only.
-  if (req.user.role === 'branch_admin') {
+  // Local admins manage ushers in their own local only.
+  if (req.user.role === 'local_admin') {
     if (existing.role !== 'usher') {
       throw new ApiError(403, 'Local admins can only manage usher accounts.');
     }
-    if (existing.branch_id !== req.user.branch_id) {
+    if (existing.local_id !== req.user.local_id) {
       throw new ApiError(403, 'You can only manage users in your own local.');
     }
   }
@@ -169,14 +169,14 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const name = vStr(req.body, 'name', { required: true, max: 120, label: 'Full name' });
   const email = vEmail(req.body, 'email', { required: true });
   const phone = vStr(req.body, 'phone', { max: 40 });
-  const branchId = vInt(req.body, 'branchId');
-  const requestedRole = vEnum(req.body, 'role', ['district_admin', 'branch_admin', 'usher']);
+  const localId = vInt(req.body, 'localId');
+  const requestedRole = vEnum(req.body, 'role', ['district_admin', 'local_admin', 'usher']);
 
   // vInt/vEnum return null both when a field is absent and when it is explicitly
   // empty, so presence must be checked on the raw body. Without this, saving a
   // user would blank fields the caller never sent.
   const has = (field) => !!req.body && Object.prototype.hasOwnProperty.call(req.body, field);
-  const branchProvided = has('branchId');
+  const localProvided = has('localId');
   const roleProvided = has('role');
 
   // Re-assigning a role re-scopes everything the account can reach, so it stays a
@@ -192,19 +192,19 @@ router.put('/:id', asyncHandler(async (req, res) => {
     role = requestedRole;
   }
 
-  // The branch that applies once this request is saved.
-  const nextBranchId = branchProvided ? branchId : existing.branch_id;
+  // The local that applies once this request is saved.
+  const nextLocalId = localProvided ? localId : existing.local_id;
   if (role === 'district_admin') {
-    if (nextBranchId) throw new ApiError(400, 'District admin cannot be assigned to a local.');
-  } else if (!nextBranchId) {
+    if (nextLocalId) throw new ApiError(400, 'District admin cannot be assigned to a local.');
+  } else if (!nextLocalId) {
     throw new ApiError(400, 'Local admin and usher must be assigned to a local.');
   }
 
-  if (nextBranchId !== existing.branch_id) {
-    const branchCheck = await db.query(`SELECT id FROM branches WHERE id = $1 AND status = 'active'`, [nextBranchId]);
-    if (!branchCheck.rows.length) throw new ApiError(400, 'Invalid or inactive local.');
-    // Branch admin can only assign to their own branch
-    if (req.user.role === 'branch_admin' && nextBranchId !== req.user.branch_id) {
+  if (nextLocalId !== existing.local_id) {
+    const localCheck = await db.query(`SELECT id FROM locals WHERE id = $1 AND status = 'active'`, [nextLocalId]);
+    if (!localCheck.rows.length) throw new ApiError(400, 'Invalid or inactive local.');
+    // Local admin can only assign to their own local
+    if (req.user.role === 'local_admin' && nextLocalId !== req.user.local_id) {
       throw new ApiError(403, 'You can only assign users to your own local.');
     }
   }
@@ -213,8 +213,8 @@ router.put('/:id', asyncHandler(async (req, res) => {
   if (dup.rows.length) throw new ApiError(409, 'Another account already uses this email.');
 
   await db.query(
-    'UPDATE users SET name = $1, email = $2, phone = $3, branch_id = $4, role = $5 WHERE id = $6',
-    [name, email, phone, nextBranchId || null, role, id]
+    'UPDATE users SET name = $1, email = $2, phone = $3, local_id = $4, role = $5 WHERE id = $6',
+    [name, email, phone, nextLocalId || null, role, id]
   );
   res.json({ user: cleanUser(await findUser(id)) });
 }));
@@ -224,15 +224,15 @@ router.patch('/:id/status', asyncHandler(async (req, res) => {
   const status = vEnum(req.body, 'status', ['active', 'inactive'], { required: true });
   const existing = await findUser(id);
   if (!existing) throw new ApiError(404, 'User not found.');
-  if (req.user.role === 'branch_admin' && (existing.role !== 'usher' || existing.branch_id !== req.user.branch_id)) {
+  if (req.user.role === 'local_admin' && (existing.role !== 'usher' || existing.local_id !== req.user.local_id)) {
     throw new ApiError(403, 'You can only manage ushers in your own local.');
   }
   if (id === req.user.id && status === 'inactive') {
     throw new ApiError(400, 'You cannot deactivate your own account.');
   }
-  if (['district_admin', 'branch_admin'].includes(existing.role) && status === 'inactive') {
+  if (['district_admin', 'local_admin'].includes(existing.role) && status === 'inactive') {
     const { rows } = await db.query(
-      `SELECT COUNT(*) AS n FROM users WHERE role IN ('district_admin', 'branch_admin') AND status = 'active' AND id <> $1`,
+      `SELECT COUNT(*) AS n FROM users WHERE role IN ('district_admin', 'local_admin') AND status = 'active' AND id <> $1`,
       [id]
     );
     if (Number(rows[0].n) === 0) {
@@ -253,7 +253,7 @@ router.post('/:id/reset-password', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const existing = await findUser(id);
   if (!existing) throw new ApiError(404, 'User not found.');
-  if (req.user.role === 'branch_admin' && (existing.role !== 'usher' || existing.branch_id !== req.user.branch_id)) {
+  if (req.user.role === 'local_admin' && (existing.role !== 'usher' || existing.local_id !== req.user.local_id)) {
     throw new ApiError(403, 'You can only manage ushers in your own local.');
   }
 
@@ -274,7 +274,7 @@ router.get('/:id/attendance-records', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const existing = await findUser(id);
   if (!existing) throw new ApiError(404, 'User not found.');
-  if (req.user.role === 'branch_admin' && (existing.role !== 'usher' || existing.branch_id !== req.user.branch_id)) {
+  if (req.user.role === 'local_admin' && (existing.role !== 'usher' || existing.local_id !== req.user.local_id)) {
     throw new ApiError(403, 'You can only manage ushers in your own local.');
   }
 
@@ -310,3 +310,4 @@ router.get('/:id/attendance-records', asyncHandler(async (req, res) => {
 }));
 
 module.exports = router;
+

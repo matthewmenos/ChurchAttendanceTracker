@@ -10,12 +10,12 @@ import { TrendChart } from '../../components/charts/Charts.jsx';
 import { IconCircleCheck } from '../../components/ui/icons.jsx';
 import { formatDate, formatShortDate, timeAgo } from '../../utils/format.js';
 
-function BranchComparison() {
-  const { data, loading, error, reload } = useFetch(() => api('/reports/branches'), []);
+function LocalComparison() {
+  const { data, loading, error, reload } = useFetch(() => api('/reports/locals'), []);
   if (loading) return <section className='card pad'><LoadingBlock label='Comparing locals…' /></section>;
   if (error) return <section className='card pad'><ErrorState error={error} onRetry={reload} /></section>;
 
-  const rows = (data && data.branches) || [];
+  const rows = (data && data.locals) || [];
   const totals = (data && data.totals) || null;
   return (
     <section className='card' aria-label='Local comparison'>
@@ -26,7 +26,7 @@ function BranchComparison() {
       {totals && (
         <p className='muted small pad-inline'>
           <strong>{totals.total_active_members}</strong> active members across{' '}
-          <strong>{totals.branch_count}</strong> locals
+          <strong>{totals.local_count}</strong> locals
           {totals.unassigned_members > 0 && (
             <> · <strong>{totals.unassigned_members}</strong> member{totals.unassigned_members === 1 ? '' : 's'} not assigned to any local</>
           )}
@@ -59,11 +59,11 @@ function BranchComparison() {
 }
 
 export default function OverviewPage() {
-  const { user, currentBranchId } = useAuth();
+  const { user, currentLocalId } = useAuth();
   const isDistrictAdmin = !!user && user.role === 'district_admin';
   const { data, loading, error, reload } = useFetch(
-    () => api("/reports/dashboard", { params: currentBranchId ? { branchId: currentBranchId } : {} }),
-    [currentBranchId]
+    () => api("/reports/dashboard", { params: currentLocalId ? { localId: currentLocalId } : {} }),
+    [currentLocalId]
   );
 
   useEffect(() => {
@@ -107,7 +107,7 @@ export default function OverviewPage() {
         <TrendChart points={(d.trend || []).map((t) => ({ label: formatShortDate(t.service_date), value: t.present }))} />
       </section>
 
-      {isDistrictAdmin && <BranchComparison />}
+      {isDistrictAdmin && <LocalComparison />}
 
       <div className='grid-2'>
         <section className='card' aria-label='Recent services'>

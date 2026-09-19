@@ -1,4 +1,4 @@
-const db = require('../config/db');
+﻿const db = require('../config/db');
 const { ApiError } = require('../utils/errors');
 const { verifyAccessToken } = require('../utils/tokens');
 
@@ -24,7 +24,7 @@ async function authenticate(req, res, next) {
       throw new ApiError(401, 'Your session has expired. Please sign in again.');
     }
     const { rows } = await db.query(
-      'SELECT id, name, email, role, status, must_change_password, last_login_at, branch_id FROM users WHERE id = $1',
+      'SELECT id, name, email, role, status, must_change_password, last_login_at, local_id FROM users WHERE id = $1',
       [payload.sub]
     );
     const user = rows[0];
@@ -38,7 +38,7 @@ async function authenticate(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.user || !['district_admin', 'branch_admin'].includes(req.user.role)) {
+  if (!req.user || !['district_admin', 'local_admin'].includes(req.user.role)) {
     return next(new ApiError(403, 'Admin access is required for this action.'));
   }
   return next();
@@ -51,41 +51,42 @@ function requireDistrictAdmin(req, res, next) {
   return next();
 }
 
-function requireBranchAdmin(req, res, next) {
-  if (!req.user || (req.user.role !== 'branch_admin' && req.user.role !== 'district_admin')) {
+function requireLocalAdmin(req, res, next) {
+  if (!req.user || (req.user.role !== 'local_admin' && req.user.role !== 'district_admin')) {
     return next(new ApiError(403, 'Local admin access is required for this action.'));
   }
   return next();
 }
 
 /**
- * Returns the branch_id filter for the current request.
- * District admins can override with ?branchId= query param (null = all branches).
- * Other users are hard-scoped to their own branch. -1 matches nothing, so a
- * misconfigured account (no branch assigned) sees no data instead of everything.
+ * Returns the local_id filter for the current request.
+ * District admins can override with ?localId= query param (null = all locals).
+ * Other users are hard-scoped to their own local. -1 matches nothing, so a
+ * misconfigured account (no local assigned) sees no data instead of everything.
  */
-function getBranchFilter(req, params = {}) {
+function getLocalFilter(req, params = {}) {
   if (req.user.role === 'district_admin') {
-    return req.query.branchId ? Number(req.query.branchId) : null;
+    return req.query.localId ? Number(req.query.localId) : null;
   }
-  return req.user.branch_id || -1;
+  return req.user.local_id || -1;
 }
 
-const ADMIN_ROLES = ['district_admin', 'branch_admin'];
+const ADMIN_ROLES = ['district_admin', 'local_admin'];
 
 function isAdminRole(role) {
   return ADMIN_ROLES.includes(role);
 }
 
 /**
- * Throws 403 unless the user may view/act on data belonging to branchId.
- * District admins may access any branch; everyone else only their own.
+ * Throws 403 unless the user may view/act on data belonging to localId.
+ * District admins may access any local; everyone else only their own.
  */
-function assertBranchAccess(user, branchId) {
+function assertLocalAccess(user, localId) {
   if (!user) throw new ApiError(401, 'Authentication required. Please sign in.');
   if (user.role === 'district_admin') return;
-  if (branchId != null && Number(user.branch_id) === Number(branchId)) return;
+  if (localId != null && Number(user.local_id) === Number(localId)) return;
   throw new ApiError(403, 'You do not have access to this local.');
 }
 
-module.exports = { authenticate, requireAdmin, requireDistrictAdmin, requireBranchAdmin, getBranchFilter, assertBranchAccess, isAdminRole, ADMIN_ROLES, ACCESS_COOKIE, REFRESH_COOKIE };
+module.exports = { authenticate, requireAdmin, requireDistrictAdmin, requireLocalAdmin, getLocalFilter, assertLocalAccess, isAdminRole, ADMIN_ROLES, ACCESS_COOKIE, REFRESH_COOKIE };
+

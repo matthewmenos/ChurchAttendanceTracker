@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Recompute consecutive_absences + last_attended for one member.
  * Streak counts the most recent consecutive services marked absent.
  * present resets the streak; excused stops counting without punishing.
@@ -43,15 +43,15 @@ async function recomputeMemberStats(db, memberId) {
   return streak;
 }
 
-async function getServiceTotals(db, serviceId, branchId) {
+async function getServiceTotals(db, serviceId, localId) {
   // "Unmarked means absent": the pool is every active member of the service's
-  // branch; members with no attendance record for this service are counted as
+  // local; members with no attendance record for this service are counted as
   // absent (with their gender, when known) rather than in a separate bucket.
   const params = [serviceId];
   let whereSql = `WHERE m.status = 'active'`;
-  if (branchId != null) {
-    params.push(branchId);
-    whereSql += ` AND m.branch_id = $${params.length}`;
+  if (localId != null) {
+    params.push(localId);
+    whereSql += ` AND m.local_id = $${params.length}`;
   }
   const { rows } = await db.query(
     `SELECT COUNT(*) AS eligible,

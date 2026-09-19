@@ -28,12 +28,12 @@ const RESPONSES = [
   { match: 'AS active,', rows: [{ active: '120', inactive: '9' }] },
   { match: 'FROM follow_ups f', rows: [{ n: '7' }] },
   { match: 'FROM settings', rows: [{ key: 'church_name', value: 'Grace Chapel' }] },
-  { match: 'SELECT m.full_name, m.member_code', rows: [{ full_name: 'Ada Mensah', member_code: 'M-001', status: 'active', gender: 'female', age: 34, phone: '555-0100', email: 'ada@example.com', branch_name: 'Central', last_attended: '2024-03-03', consecutive_absences: 0, group_name: 'Ushering' }] },
+  { match: 'SELECT m.full_name, m.member_code', rows: [{ full_name: 'Ada Mensah', member_code: 'M-001', status: 'active', gender: 'female', age: 34, phone: '555-0100', email: 'ada@example.com', local_name: 'Central', last_attended: '2024-03-03', consecutive_absences: 0, group_name: 'Ushering' }] },
   { match: 'SELECT v.full_name, v.gender', rows: [{ full_name: 'Kwesi Boateng', gender: 'male', phone: '555-0199', email: null, age_group: '25-34', home_area: 'East Legon', invited_by: 'Ada Mensah', first_visit_date: '2024-03-03', last_visit_date: '2024-03-03', visit_count: 1, followup_status: 'new', service_name: 'Sunday Service', service_date: '2024-03-03', created_by_name: 'Ruth Usher' }] },
   { match: 'AS member_name,', rows: [{ service_date: '2024-03-03', service_name: 'Sunday Service', member_name: 'Ada Mensah', group_name: 'Ushering', status: 'present', recorded_by_name: 'Ruth Usher', recorded_at: '2024-03-03T09:15:00', updated_by_name: null, updated_at: null, notes: null }] },
   { match: 'LEFT JOIN visitors v ON v.service_id = s.id', rows: [{ id: 2, service_name: 'Sunday Service', service_date: '2024-03-03', total_visitors: '5', first_time: '3', returning: '2', male: '2', female: '3', converted: '1' }] },
-  { match: 'FROM branches b', rows: [{ id: 1, name: 'Central', location: 'Accra', active_members: '70', open_follow_ups: '4', services: '9', present: '540', absent: '60', excused: '12', avg_present_per_service: 60 }] },
-  { match: 'AS total_active_members', rows: [{ total_active_members: '129', unassigned_members: '9', branch_count: '3' }] },
+  { match: 'FROM locals b', rows: [{ id: 1, name: 'Central', location: 'Accra', active_members: '70', open_follow_ups: '4', services: '9', present: '540', absent: '60', excused: '12', avg_present_per_service: 60 }] },
+  { match: 'AS total_active_members', rows: [{ total_active_members: '129', unassigned_members: '9', local_count: '3' }] },
 ];
 
 const seen = [];
@@ -66,7 +66,7 @@ describe('report export workbook', () => {
       from: '2024-01-01',
       to: '2024-03-31',
       scope: null,
-      includeBranches: true,
+      includeLocals: true,
     });
 
     expect(filename).toBe('attendance-report-2024-01-01-to-2024-03-31.xlsx');
@@ -91,7 +91,7 @@ describe('report export workbook', () => {
       visitors: 1,
       attendance: 1,
       attendanceTruncated: false,
-      branches: 1,
+      locals: 1,
     });
   });
 
@@ -143,14 +143,14 @@ describe('report export workbook', () => {
       from: '2024-01-01',
       to: '2024-03-31',
       scope: 7,
-      includeBranches: false,
+      includeLocals: false,
     });
     const { sheetNames } = await openWorkbook(buffer);
 
     expect(sheetNames).not.toContain('By local');
-    expect(counts.branches).toBe(0);
-    expect(seen.some((sql) => sql.includes('FROM branches b'))).toBe(false);
-    // The branch id is bound as a parameter, never interpolated into the SQL.
-    expect(seen.some((sql) => sql.includes('branch_id = $'))).toBe(true);
+    expect(counts.locals).toBe(0);
+    expect(seen.some((sql) => sql.includes('FROM locals b'))).toBe(false);
+    // The local id is bound as a parameter, never interpolated into the SQL.
+    expect(seen.some((sql) => sql.includes('local_id = $'))).toBe(true);
   });
 });

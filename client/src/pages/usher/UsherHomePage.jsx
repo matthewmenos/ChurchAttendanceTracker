@@ -53,7 +53,7 @@ export default function UsherHomePage() {
     <div className='container narrow'>
       <PageHeader
         title={`${greeting()}, ${user ? user.name.split(' ')[0] : ''}`}
-        subtitle={user && user.branch_name ? `Assigned local: ${user.branch_name} · Choose the current service, then mark each member.` : 'Choose the current service, then mark each member with a single tap.'}
+        subtitle={user && user.local_name ? `Assigned local: ${user.local_name} · Choose the current service, then mark each member.` : 'Choose the current service, then mark each member with a single tap.'}
       />
 
       {loading && <LoadingBlock label='Loading services…' />}

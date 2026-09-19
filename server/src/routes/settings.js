@@ -25,7 +25,7 @@ router.put('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
   const updates = [];
 
   // Church-wide settings (identity, branding and the SMS automations) belong to the
-  // district admin alone; a branch admin manages branch-level policy only.
+  // district admin alone; a local admin manages local-level policy only.
   const DISTRICT_ONLY_KEYS = [
     'church_name',
     'logo',

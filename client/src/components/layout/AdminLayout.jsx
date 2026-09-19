@@ -7,7 +7,7 @@ import { Button } from '../ui/forms.jsx';
 import Logo from '../ui/Logo.jsx';
 import ChangePasswordModal from '../ChangePasswordModal.jsx';
 import InstallPrompt from '../InstallPrompt.jsx';
-import BranchSelector from '../BranchSelector.jsx';
+import LocalSelector from '../LocalSelector.jsx';
 import PullToRefresh from '../PullToRefresh.jsx';
 import {
   IconChart,
@@ -35,17 +35,17 @@ const NAV_ITEMS = [
 ];
 
 const DISTRICT_NAV_ITEMS = [
-  { to: '/admin/branches', label: 'Locals', icon: IconMapPin },
+  { to: '/admin/locals', label: 'Locals', icon: IconMapPin },
 ];
 
 export default function AdminLayout() {
-  const { user, logout, branches, currentBranchId } = useAuth();
+  const { user, logout, locals, currentLocalId } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
 
-  // Add branches nav item for district admin
+  // Add locals nav item for district admin
   const navItems = user?.role === 'district_admin' 
     ? [...DISTRICT_NAV_ITEMS, ...NAV_ITEMS]
     : NAV_ITEMS;
@@ -93,7 +93,7 @@ export default function AdminLayout() {
             <span className='user-meta'>
               <strong>{user ? user.name : ''}</strong>
               <Badge variant={user && user.role === 'district_admin' ? 'info' : 'neutral'}>
-                {user?.role === 'district_admin' ? 'District' : user?.role === 'branch_admin' ? 'Local' : 'Admin'}
+                {user?.role === 'district_admin' ? 'District' : user?.role === 'local_admin' ? 'Local' : 'Admin'}
               </Badge>
             </span>
           </div>
@@ -119,7 +119,7 @@ export default function AdminLayout() {
             <IconMenu size={22} />
           </button>
           <span className='topbar-title'>Church Attendance Tracker</span>
-          <BranchSelector />
+          <LocalSelector />
           <InstallPrompt />
           <span className='topbar-user' title={user ? user.email : ''}>{user ? user.name : ''}</span>
         </header>

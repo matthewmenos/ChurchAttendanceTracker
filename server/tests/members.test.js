@@ -1,4 +1,4 @@
-process.env.NODE_ENV = 'test';
+﻿process.env.NODE_ENV = 'test';
 
 const { resetTables, loginAs, seedBase, db, app } = require('./helpers');
 const request = require('supertest');
@@ -169,7 +169,7 @@ describe('Duplicate member detection (2 of 3: name / birthday / phone)', () => {
 describe('Duplicate detection: quick-add, edit and pre-check endpoint', () => {
   test('blocks quick-add duplicates too', async () => {
     const { base, usher } = await setup();
-    await db.query('UPDATE branches SET allow_usher_add_member = TRUE WHERE id = $1', [base.branchId]);
+    await db.query('UPDATE locals SET allow_usher_add_member = TRUE WHERE id = $1', [base.localId]);
     await db.query("UPDATE members SET phone = '0244123456', birthday = '1990-05-01' WHERE id = $1", [base.members[0].id]);
     const dup = await usher.post('/api/members/quick-add').send({
       fullName: 'alice johnson',

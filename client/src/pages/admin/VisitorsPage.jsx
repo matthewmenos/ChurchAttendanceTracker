@@ -19,12 +19,12 @@ const statusLabel = (k) => (STATUSES.find(([x]) => x === k) || [k, k])[1];
 
 export default function VisitorsPage() {
   const toast = useToast();
-  const { user, branches } = useAuth();
+  const { user, locals } = useAuth();
   const isDistrict = !!user && user.role === 'district_admin';
   const [search, setSearch] = useState('');
   const debounced = useDebounce(search);
   const [status, setStatus] = useState('');
-  const [branchId, setBranchId] = useState('');
+  const [localId, setLocalId] = useState('');
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -34,8 +34,8 @@ export default function VisitorsPage() {
   const [converting, setConverting] = useState(false);
 
   const listQ = useFetch(
-    () => api('/visitors', { params: { search: debounced || undefined, followupStatus: status || undefined, branchId: isDistrict && branchId ? Number(branchId) : undefined, page, pageSize: 20 } }),
-    [debounced, status, branchId, page]
+    () => api('/visitors', { params: { search: debounced || undefined, followupStatus: status || undefined, localId: isDistrict && localId ? Number(localId) : undefined, page, pageSize: 20 } }),
+    [debounced, status, localId, page]
   );
   const statsQ = useFetch(() => api('/visitors/stats'), []);
   const items = (listQ.data && listQ.data.items) || [];
@@ -142,9 +142,9 @@ export default function VisitorsPage() {
           {STATUSES.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
         </Select>
         {isDistrict && (
-          <Select value={branchId} onChange={(e) => { setBranchId(e.target.value); setPage(1); }} aria-label='Filter by local' className='select-fit'>
+          <Select value={localId} onChange={(e) => { setLocalId(e.target.value); setPage(1); }} aria-label='Filter by local' className='select-fit'>
             <option value=''>All locals</option>
-            {(branches || []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            {(locals || []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </Select>
         )}
       </div>

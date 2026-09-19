@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Seeds the database with realistic demo data.
  * Safe to re-run: clears all data tables first.
  */
@@ -37,7 +37,7 @@ async function main() {
   }
   console.log('Seeding database...');
   // Wipe previous demo data so the seed can be re-run safely.
-  // (settings are kept — admins may have customised them)
+  // (settings are kept â€” admins may have customised them)
   await db.query(
     'TRUNCATE attendance, follow_ups, refresh_tokens, services, members, member_groups, locations, users, member_group_assignments, birthday_messages RESTART IDENTITY CASCADE'
   );
@@ -46,23 +46,23 @@ async function main() {
   const adminHash = await hashPassword(env.seed.adminPassword);
   const usherHash = await hashPassword(env.seed.usherPassword);
   const { rows: adminRows } = await db.query(
-    `INSERT INTO users (name, email, password_hash, role, branch_id)
-     VALUES ($1, $2, $3, 'district_admin', (SELECT id FROM branches WHERE name = 'Main Branch'))
+    `INSERT INTO users (name, email, password_hash, role, local_id)
+     VALUES ($1, $2, $3, 'district_admin', (SELECT id FROM locals WHERE name = 'Main Local'))
      RETURNING id`,
     [env.seed.adminName, env.seed.adminEmail.toLowerCase(), adminHash]
   );
   const adminId = adminRows[0].id;
 
   const { rows: u1Rows } = await db.query(
-    `INSERT INTO users (name, email, password_hash, role, created_by, branch_id)
-     VALUES ($1, $2, $3, 'usher', $4, (SELECT id FROM branches WHERE name = 'Main Branch')) RETURNING id`,
+    `INSERT INTO users (name, email, password_hash, role, created_by, local_id)
+     VALUES ($1, $2, $3, 'usher', $4, (SELECT id FROM locals WHERE name = 'Main Local')) RETURNING id`,
     [env.seed.usherName, env.seed.usherEmail.toLowerCase(), usherHash, adminId]
   );
   const usher1 = u1Rows[0].id;
 
   const { rows: u2Rows } = await db.query(
-    `INSERT INTO users (name, email, password_hash, role, created_by, branch_id)
-     VALUES ($1, $2, $3, 'usher', $4, (SELECT id FROM branches WHERE name = 'Main Branch')) RETURNING id`,
+    `INSERT INTO users (name, email, password_hash, role, created_by, local_id)
+     VALUES ($1, $2, $3, 'usher', $4, (SELECT id FROM locals WHERE name = 'Main Local')) RETURNING id`,
     ['Daniel Okafor', process.env.SEED_USHER2_EMAIL || `daniel@${env.seed.usherEmail.split('@')[1]}`, usherHash, adminId]
   );
   const usher2 = u2Rows[0].id;
@@ -321,3 +321,4 @@ main()
     console.error('Seed failed:', e.message);
     process.exit(1);
   });
+

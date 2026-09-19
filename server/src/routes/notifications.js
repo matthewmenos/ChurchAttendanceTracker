@@ -9,7 +9,7 @@ const { getAudience, sendAnnouncement, listHistory } = require('../services/noti
 
 const router = express.Router();
 // SMS announcements and reminders are church-wide: only the district admin may
-// compose them or read the delivery history. Branch admins manage branch-level
+// compose them or read the delivery history. Local admins manage local-level
 // data only.
 router.use(authenticate, requireDistrictAdmin);
 

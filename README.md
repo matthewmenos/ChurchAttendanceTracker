@@ -176,7 +176,7 @@ reloads with fresh content.
 | Attendance | `GET /attendance`, `GET /attendance/:id`, `DELETE /attendance/:id` | admin |
 | Groups/Locations | `GET …` shared · `POST·PUT·DELETE …` admin |
 | Follow-ups | `/followups` CRUD | admin |
-| Reports | `GET /reports/dashboard`, `GET /reports/summary`, `GET /reports/branches`, `GET /reports/export` (Excel) | admin |
+| Reports | `GET /reports/dashboard`, `GET /reports/summary`, `GET /reports/locals`, `GET /reports/export` (Excel) | admin |
 | Settings | `GET /settings/public` shared · `GET·PUT /settings` admin |
 
 Validation errors return `400 { message, errors:[{field,message}] }`; authorization

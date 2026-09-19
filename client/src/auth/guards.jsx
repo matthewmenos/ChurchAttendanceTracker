@@ -18,10 +18,10 @@ export function RequireRole({ allow }) {
   return <Outlet />;
 }
 
-/** Roles that get the admin console (district-wide and single-branch admins). */
-export const ADMIN_ROLES = ['district_admin', 'branch_admin'];
+/** Roles that get the admin console (district-wide and single-local admins). */
+export const ADMIN_ROLES = ['district_admin', 'local_admin'];
 
-/** True when the role manages a branch or the whole church. */
+/** True when the role manages a local or the whole church. */
 export function isAdminRole(role) {
   return ADMIN_ROLES.includes(role);
 }

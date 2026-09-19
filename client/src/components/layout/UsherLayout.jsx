@@ -16,9 +16,9 @@ export default function UsherLayout() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // When the branch admin allows ushers to add members, a "+" button sits in
+  // When the local admin allows ushers to add members, a "+" button sits in
   // the middle of the bottom nav between Visitors and My marks.
-  const canAddMember = !!(user && user.branch_allows_member_add);
+  const canAddMember = !!(user && user.local_allows_member_add);
   const leftTabs = TABS.slice(0, 2);
   const rightTabs = TABS.slice(2);
 

@@ -565,7 +565,7 @@ function ResourceTab({ labelSingular, listQ, deleteConfirmText }) {
 export default function SettingsPage() {
   const { user } = useAuth();
   // Church-wide configuration (birthday SMS, notification dispatch) belongs to the
-  // district admin; branch admins only manage branch-level settings.
+  // district admin; local admins only manage local-level settings.
   const isDistrict = !!user && user.role === 'district_admin';
   const [tab, setTab] = useState(isDistrict ? 'general' : 'permissions');
   const settingsQ = useFetch(() => api('/settings'), []);

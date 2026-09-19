@@ -14,7 +14,7 @@ import { IconUsers } from '../../components/ui/icons.jsx';
 const STATUS_LABEL = { open: 'Open', closed: 'Closed' };
 
 export default function FollowUpsPage() {
-  const { currentBranchId } = useAuth();
+  const { currentLocalId } = useAuth();
   const toast = useToast();
   const [status, setStatus] = useState('open');
   const [priority, setPriority] = useState('all');
@@ -22,11 +22,11 @@ export default function FollowUpsPage() {
   const [listError, setListError] = useState('');
   const [syncing, setSyncing] = useState(false);
 
-  // District admins narrow with the branch switcher; branch admins are
-  // hard-scoped to their own branch by the API.
+  // District admins narrow with the local switcher; local admins are
+  // hard-scoped to their own local by the API.
   const listQ = useFetch(
-    () => api('/followups', { params: { status, priority, branchId: currentBranchId || undefined } }),
-    [status, priority, currentBranchId]
+    () => api('/followups', { params: { status, priority, localId: currentLocalId || undefined } }),
+    [status, priority, currentLocalId]
   );
   const items = (listQ.data && listQ.data.items) || [];
 
@@ -56,7 +56,7 @@ export default function FollowUpsPage() {
     try {
       const result = await api('/followups/sync', {
         method: 'POST',
-        params: { branchId: currentBranchId || undefined },
+        params: { localId: currentLocalId || undefined },
       });
       const created = ((result && result.created) || []).length;
       if (result && result.disabled) {

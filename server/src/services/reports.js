@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 /**
  * Reporting queries shared by the JSON report endpoints and the Excel export.
@@ -24,24 +24,24 @@ function defaultRange(query = {}) {
 }
 
 /**
- * Branch scoping for report queries.
- * District admins see all branches (narrow with ?branchId=); every other
- * admin is hard-scoped to their own branch (-1 matches nothing).
+ * Local scoping for report queries.
+ * District admins see all locals (narrow with ?localId=); every other
+ * admin is hard-scoped to their own local (-1 matches nothing).
  */
-function branchScope(req) {
+function localScope(req) {
   if (req.user.role === 'district_admin') {
-    return req.query.branchId ? Number(req.query.branchId) : null;
+    return req.query.localId ? Number(req.query.localId) : null;
   }
-  return req.user.branch_id || -1;
+  return req.user.local_id || -1;
 }
 
-/** Factory: returns a helper that appends a branch condition to a query. */
-function makeBranchWhere(scope) {
+/** Factory: returns a helper that appends a local condition to a query. */
+function makeLocalWhere(scope) {
   return (baseParams, alias) => {
     const params = [...baseParams];
     if (scope == null) return { params, sql: '' };
     params.push(scope);
-    return { params, sql: ` AND ${alias}.branch_id = $${params.length}` };
+    return { params, sql: ` AND ${alias}.local_id = $${params.length}` };
   };
 }
 
@@ -61,9 +61,9 @@ const SERVICE_COUNTS_JOIN = `
 
 /** Aggregated report data over a date range (shape of GET /reports/summary). */
 async function getReportSummary(db, { from, to, scope }) {
-  const branchWhere = makeBranchWhere(scope);
+  const localWhere = makeLocalWhere(scope);
 
-  const bsB = branchWhere([from, to], 's');
+  const bsB = localWhere([from, to], 's');
   const { rows: byService } = await db.query({ text: `
     SELECT s.id, s.service_date, s.service_name, s.total_headcount, s.visitor_headcount, l.name AS location_name,
             COALESCE(a.present, 0)::int AS present,
@@ -88,16 +88,16 @@ async function getReportSummary(db, { from, to, scope }) {
     { present: 0, absent: 0, excused: 0, present_male: 0, present_female: 0 }
   );
 
-  const rangeB = branchWhere([from, to], 'm');
-  const mBranch = rangeB.sql; // " AND m.branch_id = $n" (empty when unscoped)
+  const rangeB = localWhere([from, to], 'm');
+  const mLocal = rangeB.sql; // " AND m.local_id = $n" (empty when unscoped)
 
   const groupQuery = `
     SELECT g.name,
-           COUNT(DISTINCT m.id) FILTER (WHERE m.status = 'active'${mBranch}) AS active_members,
-           COUNT(DISTINCT CASE WHEN a.status = 'present' AND s.id IS NOT NULL${mBranch} THEN m.id END) AS present_members,
-           COUNT(a.id) FILTER (WHERE a.status = 'present' AND s.id IS NOT NULL${mBranch}) AS present_count,
-           COUNT(a.id) FILTER (WHERE a.status = 'absent'  AND s.id IS NOT NULL${mBranch}) AS absent_count,
-           COUNT(a.id) FILTER (WHERE a.status = 'excused' AND s.id IS NOT NULL${mBranch}) AS excused_count
+           COUNT(DISTINCT m.id) FILTER (WHERE m.status = 'active'${mLocal}) AS active_members,
+           COUNT(DISTINCT CASE WHEN a.status = 'present' AND s.id IS NOT NULL${mLocal} THEN m.id END) AS present_members,
+           COUNT(a.id) FILTER (WHERE a.status = 'present' AND s.id IS NOT NULL${mLocal}) AS present_count,
+           COUNT(a.id) FILTER (WHERE a.status = 'absent'  AND s.id IS NOT NULL${mLocal}) AS absent_count,
+           COUNT(a.id) FILTER (WHERE a.status = 'excused' AND s.id IS NOT NULL${mLocal}) AS excused_count
       FROM member_groups g
       LEFT JOIN member_group_assignments mga ON mga.group_id = g.id
       LEFT JOIN members m ON m.id = mga.member_id
@@ -107,15 +107,15 @@ async function getReportSummary(db, { from, to, scope }) {
 
   const noGroupQuery = `
     SELECT '(No group)' AS name,
-           COUNT(DISTINCT m.id) FILTER (WHERE m.status = 'active'${mBranch}) AS active_members,
-           COUNT(DISTINCT CASE WHEN a.status = 'present' AND s.id IS NOT NULL${mBranch} THEN m.id END) AS present_members,
-           COUNT(a.id) FILTER (WHERE a.status = 'present' AND s.id IS NOT NULL${mBranch}) AS present_count,
-           COUNT(a.id) FILTER (WHERE a.status = 'absent'  AND s.id IS NOT NULL${mBranch}) AS absent_count,
-           COUNT(a.id) FILTER (WHERE a.status = 'excused' AND s.id IS NOT NULL${mBranch}) AS excused_count
+           COUNT(DISTINCT m.id) FILTER (WHERE m.status = 'active'${mLocal}) AS active_members,
+           COUNT(DISTINCT CASE WHEN a.status = 'present' AND s.id IS NOT NULL${mLocal} THEN m.id END) AS present_members,
+           COUNT(a.id) FILTER (WHERE a.status = 'present' AND s.id IS NOT NULL${mLocal}) AS present_count,
+           COUNT(a.id) FILTER (WHERE a.status = 'absent'  AND s.id IS NOT NULL${mLocal}) AS absent_count,
+           COUNT(a.id) FILTER (WHERE a.status = 'excused' AND s.id IS NOT NULL${mLocal}) AS excused_count
       FROM members m
       LEFT JOIN attendance a ON a.member_id = m.id
       LEFT JOIN services s ON s.id = a.service_id AND s.service_date BETWEEN $1 AND $2
-     WHERE TRUE${mBranch}
+     WHERE TRUE${mLocal}
        AND NOT EXISTS (SELECT 1 FROM member_group_assignments mga WHERE mga.member_id = m.id)`;
 
   const { rows: g1 } = await db.query({ text: groupQuery, values: rangeB.params });
@@ -131,7 +131,7 @@ async function getReportSummary(db, { from, to, scope }) {
     }))
     .sort((a, b) => b.active_members - a.active_members);
 
-  const raB = branchWhere([from, to], 'm');
+  const raB = localWhere([from, to], 'm');
   const { rows: repeatAbsentees } = await db.query({ text: `
      SELECT t.* FROM (
         SELECT m.id, m.full_name, gg.group_name, m.consecutive_absences, m.last_attended,
@@ -151,7 +151,7 @@ async function getReportSummary(db, { from, to, scope }) {
       ORDER BY t.consecutive_absences DESC, t.absences_in_range DESC
       LIMIT 25`, values: raB.params });
 
-  const ubB = branchWhere([], 'u');
+  const ubB = localWhere([], 'u');
   const { rows: byUsher } = await db.query(
     `SELECT u.id, u.name,
             COUNT(a.id) AS records,
@@ -183,19 +183,19 @@ async function getReportSummary(db, { from, to, scope }) {
   };
 }
 
-/** Branch-by-branch comparison (district admin only; unscoped by design). */
-async function getBranchReport(db, { from, to }) {
+/** Local-by-local comparison (district admin only; unscoped by design). */
+async function getLocalReport(db, { from, to }) {
   const { rows } = await db.query(
     `SELECT b.id, b.name, b.location,
-            (SELECT COUNT(*) FROM members m WHERE m.branch_id = b.id AND m.status = 'active') AS active_members,
+            (SELECT COUNT(*) FROM members m WHERE m.local_id = b.id AND m.status = 'active') AS active_members,
             (SELECT COUNT(*) FROM follow_ups f JOIN members m2 ON m2.id = f.member_id
-              WHERE f.status = 'open' AND m2.branch_id = b.id) AS open_follow_ups,
+              WHERE f.status = 'open' AND m2.local_id = b.id) AS open_follow_ups,
             COUNT(DISTINCT s.id) AS services,
             COALESCE(SUM(a.present), 0)::int AS present,
             COALESCE(SUM(a.absent), 0)::int  AS absent,
             COALESCE(SUM(a.excused), 0)::int AS excused
-       FROM branches b
-       LEFT JOIN services s ON s.branch_id = b.id AND s.service_date BETWEEN $1 AND $2
+       FROM locals b
+       LEFT JOIN services s ON s.local_id = b.id AND s.service_date BETWEEN $1 AND $2
        LEFT JOIN (
          SELECT service_id,
                 COUNT(*) FILTER (WHERE status = 'present') AS present,
@@ -210,7 +210,7 @@ async function getBranchReport(db, { from, to }) {
     [from, to]
   );
 
-  const branches = rows.map((r) => {
+  const locals = rows.map((r) => {
     const serviceCount = Number(r.services);
     const present = Number(r.present);
     return {
@@ -226,27 +226,29 @@ async function getBranchReport(db, { from, to }) {
   });
 
   // Church-wide roll-up for the district admin, including active members whose
-  // branch row no longer exists (branch_id IS NULL) so nobody is invisible.
+  // local row no longer exists (local_id IS NULL) so nobody is invisible.
   const { rows: totalsRows } = await db.query(
     `SELECT (SELECT COUNT(*) FROM members WHERE status = 'active') AS total_active_members,
-            (SELECT COUNT(*) FROM members WHERE branch_id IS NULL) AS unassigned_members,
-            (SELECT COUNT(*) FROM branches WHERE status = 'active') AS branch_count`
+            (SELECT COUNT(*) FROM members WHERE local_id IS NULL) AS unassigned_members,
+            (SELECT COUNT(*) FROM locals WHERE status = 'active') AS local_count`
   );
   const totals = {
     total_active_members: Number(totalsRows[0].total_active_members),
     unassigned_members: Number(totalsRows[0].unassigned_members),
-    branch_count: Number(totalsRows[0].branch_count),
+    local_count: Number(totalsRows[0].local_count),
   };
 
-  return { totals, branches };
+  return { totals, locals };
 }
 
 module.exports = {
   todayStr,
   defaultRange,
-  branchScope,
-  makeBranchWhere,
+  localScope,
+  makeLocalWhere,
   SERVICE_COUNTS_JOIN,
   getReportSummary,
-  getBranchReport,
+  getLocalReport,
 };
+
+

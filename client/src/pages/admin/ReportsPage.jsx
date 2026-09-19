@@ -40,8 +40,8 @@ export default function ReportsPage() {
     document.title = 'Reports — Church Attendance Tracker';
   }, []);
 
-  const { currentBranchId } = useAuth();
-  const summaryQ = useFetch(() => api('/reports/summary', { params: { from, to, branchId: currentBranchId || undefined } }), [rangeKey, currentBranchId]);
+  const { currentLocalId } = useAuth();
+  const summaryQ = useFetch(() => api('/reports/summary', { params: { from, to, localId: currentLocalId || undefined } }), [rangeKey, currentLocalId]);
   const visitorsQ = useFetch(() => api('/visitors/stats', { params: { from, to } }), [rangeKey]);
   const data = summaryQ.data;
   const visitorStats = (visitorsQ.data && visitorsQ.data.items) || [];
@@ -89,7 +89,7 @@ export default function ReportsPage() {
   const exportExcel = async () => {
     setExporting(true);
     try {
-      const blob = await apiBlob('/reports/export', { params: { from, to, branchId: currentBranchId || undefined } });
+      const blob = await apiBlob('/reports/export', { params: { from, to, localId: currentLocalId || undefined } });
       downloadBlob(`attendance-report-${from || 'all'}-to-${to || 'now'}.xlsx`, blob);
       toast('Excel workbook downloaded.');
     } catch (e) {

@@ -1,12 +1,12 @@
-const express = require('express');
+﻿const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vEnum, vDate } = require('../utils/validate');
-const { authenticate, requireAdmin, assertBranchAccess } = require('../middleware/auth');
+const { authenticate, requireAdmin, assertLocalAccess } = require('../middleware/auth');
 
-/** District & branch admins bypass usher-specific restrictions. */
+/** District & local admins bypass usher-specific restrictions. */
 function isAdminUser(user) {
-  return !!user && (user.role === 'district_admin' || user.role === 'branch_admin');
+  return !!user && (user.role === 'district_admin' || user.role === 'local_admin');
 }
 const { recomputeMemberStats, getServiceTotals } = require('../services/stats');
 const { getSettingsMap } = require('../services/settings');
@@ -24,10 +24,10 @@ async function serviceById(id) {
   const { rows } = await db.query(
     `SELECT s.id, s.service_date, s.service_name, s.start_time, s.total_headcount,
             s.attendance_closed, s.attendance_close_time, l.name AS location_name,
-            s.branch_id, b.name AS branch_name, s.all_branches
+            s.local_id, b.name AS local_name, s.all_locals
        FROM services s
        LEFT JOIN locations l ON l.id = s.location_id
-       LEFT JOIN branches b ON b.id = s.branch_id
+       LEFT JOIN locals b ON b.id = s.local_id
       WHERE s.id = $1`,
     [id]
   );
@@ -45,12 +45,12 @@ function isMarkingClosed(svc) {
 }
 
 /**
- * Branch access for a service. Joint services (all_branches = TRUE, e.g. a
- * combined all-branches gathering) may be viewed and marked by staff of ANY
- * branch; regular services keep the strict same-branch rule.
+ * Local access for a service. Joint services (all_locals = TRUE, e.g. a
+ * combined all-locals gathering) may be viewed and marked by staff of ANY
+ * local; regular services keep the strict same-local rule.
  */
 function checkServiceAccess(user, service) {
-  if (!service.all_branches) assertBranchAccess(user, service.branch_id);
+  if (!service.all_locals) assertLocalAccess(user, service.local_id);
 }
 
 function closedMessage(svc) {
@@ -81,7 +81,7 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
   const service = await serviceById(serviceId);
   if (!service) throw new ApiError(404, 'Service not found.');
 
-  // Check branch access
+  // Check local access
   checkServiceAccess(req.user, service);
 
   const search = vStr(req.query, 'search', { max: 100 }) || '';
@@ -170,10 +170,10 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
     service: {
     ...service,
     marking_closed: isMarkingClosed(service),
-    all_branches: !!service.all_branches,
-    // For a joint (all-branches) service the eligible pool is every active
-    // member of every branch; otherwise it is the service's branch only.
-    totals: await getServiceTotals(db, serviceId, service.all_branches ? null : service.branch_id),
+    all_locals: !!service.all_locals,
+    // For a joint (all-locals) service the eligible pool is every active
+    // member of every local; otherwise it is the service's local only.
+    totals: await getServiceTotals(db, serviceId, service.all_locals ? null : service.local_id),
   },
     rows: outRows,
     markedCount: Number(markedRow.marked),
@@ -186,7 +186,7 @@ router.get('/roster/:serviceId', authenticate, asyncHandler(async (req, res) => 
   });
 }));
 
-/** Recent records submitted by the signed-in user — powers the usher "My marks" screen. */
+/** Recent records submitted by the signed-in user â€” powers the usher "My marks" screen. */
 router.get('/mine', authenticate, asyncHandler(async (req, res) => {
   const settings = await getSettingsMap(db);
   const canCorrectSetting = settings.usher_can_correct_attendance === 'true';
@@ -231,16 +231,16 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
 
   const service = await serviceById(serviceId);
   if (!service) throw new ApiError(404, 'Service not found.');
-  // Only staff of the service's branch may mark attendance for it.
+  // Only staff of the service's local may mark attendance for it.
   checkServiceAccess(req.user, service);
   if (isMarkingClosed(service)) throw new ApiError(403, closedMessage(service));
 
-  const { rows: memberRows } = await db.query('SELECT id, status, branch_id FROM members WHERE id = $1', [memberId]);
+  const { rows: memberRows } = await db.query('SELECT id, status, local_id FROM members WHERE id = $1', [memberId]);
   const member = memberRows[0];
   if (!member) throw new ApiError(404, 'Member not found.');
-  // Members belong to a branch; they can only be marked for that branch's
-  // services — except at a joint (all-branches) service, where everyone gathers.
-  if (!service.all_branches && member.branch_id !== service.branch_id) {
+  // Members belong to a local; they can only be marked for that local's
+  // services â€” except at a joint (all-locals) service, where everyone gathers.
+  if (!service.all_locals && member.local_id !== service.local_id) {
     throw new ApiError(400, 'This member belongs to a different local than this service.');
   }
   if (member.status !== 'active') {
@@ -311,7 +311,7 @@ router.put('/:id', authenticate, asyncHandler(async (req, res) => {
 /**
  * Quick mark by member code (PIN flow). The usher types the member's code at
  * the door; the member is marked for this service (present by default).
- * Branch access checks apply exactly like manual marking.
+ * Local access checks apply exactly like manual marking.
  */
 router.post('/code', authenticate, asyncHandler(async (req, res) => {
   const serviceId = vInt(req.body, 'serviceId', { required: true, label: 'Service' });
@@ -330,12 +330,12 @@ router.post('/code', authenticate, asyncHandler(async (req, res) => {
   if (isMarkingClosed(service)) throw new ApiError(403, closedMessage(service));
 
   const { rows: memberRows } = await db.query(
-    'SELECT id, status, branch_id, full_name FROM members WHERE member_code = $1',
+    'SELECT id, status, local_id, full_name FROM members WHERE member_code = $1',
     [code]
   );
   const member = memberRows[0];
   if (!member) throw new ApiError(404, 'No member matches that code.');
-  if (!service.all_branches && member.branch_id !== service.branch_id) {
+  if (!service.all_locals && member.local_id !== service.local_id) {
     throw new ApiError(400, 'This member belongs to a different local than this service.');
   }
   if (member.status !== 'active') {
@@ -367,12 +367,12 @@ router.get('/', authenticate, requireAdmin, asyncHandler(async (req, res) => {
 
   const where = [];
   const params = [];
-  // Branch admins only see records for their own branch's services.
-  // Joint (branch-less) services are visible to every admin; scoping is by
-  // service branch, not by which member was marked.
+  // Local admins only see records for their own local's services.
+  // Joint (local-less) services are visible to every admin; scoping is by
+  // service local, not by which member was marked.
   if (req.user.role !== 'district_admin') {
-    params.push(req.user.branch_id || -1);
-    where.push(`(s.branch_id = $${params.length} OR s.all_branches = TRUE)`);
+    params.push(req.user.local_id || -1);
+    where.push(`(s.local_id = $${params.length} OR s.all_locals = TRUE)`);
   }
   if (serviceId) { params.push(serviceId); where.push(`a.service_id = $${params.length}`); }
   if (memberId) { params.push(memberId); where.push(`a.member_id = $${params.length}`); }
@@ -432,3 +432,5 @@ router.delete('/:id', authenticate, requireAdmin, asyncHandler(async (req, res) 
 }));
 
 module.exports = router;
+
+

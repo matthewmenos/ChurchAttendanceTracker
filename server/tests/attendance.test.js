@@ -1,4 +1,4 @@
-process.env.NODE_ENV = 'test';
+﻿process.env.NODE_ENV = 'test';
 
 const db = require('../src/config/db');
 const { resetTables, loginAs, seedBase } = require('./helpers');

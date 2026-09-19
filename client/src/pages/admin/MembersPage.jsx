@@ -93,7 +93,7 @@ function DetailRow({ label, value }) {
 
 export default function MembersPage() {
   const toast = useToast();
-  const { user, branches, currentBranchId } = useAuth();
+  const { user, locals, currentLocalId } = useAuth();
   const canTransfer = !!user && user.role === 'district_admin';
   const [search, setSearch] = useState('');
   const debounced = useDebounce(search);
@@ -116,7 +116,7 @@ export default function MembersPage() {
   const [formPhone, setFormPhone] = useState('');
   const dupCheck = useDuplicateCheck({ fullName: formName, phone: formPhone, birthday, excludeId: editing ? editing.id : null });
   const isDuplicate = dupCheck.duplicate === true;
-  // Branch transfer (district admin only).
+  // local transfer (district admin only).
   const [transferTarget, setTransferTarget] = useState(null);
   const [transferring, setTransferring] = useState(false);
 
@@ -144,26 +144,26 @@ export default function MembersPage() {
   const items = (listQ.data && listQ.data.items) || [];
   const total = (listQ.data && listQ.data.total) || 0;
 
-  // Branch admins control whether their ushers may add members.
-  const isBranchAdmin = !!user && user.role === 'branch_admin';
-  const branchQ = useFetch(() => api('/branches'), []);
-  const myBranch = (branchQ.data && branchQ.data.items && branchQ.data.items[0]) || null;
+  // Local admins control whether their ushers may add members.
+  const isLocalAdmin = !!user && user.role === 'local_admin';
+  const localQ = useFetch(() => api('/locals'), []);
+  const myLocal = (localQ.data && localQ.data.items && localQ.data.items[0]) || null;
   const [allowUsherAdd, setAllowUsherAdd] = useState(null);
   const [togglingAllow, setTogglingAllow] = useState(false);
   useEffect(() => {
-    if (myBranch) setAllowUsherAdd(!!myBranch.allow_usher_add_member);
-  }, [myBranch && myBranch.id, myBranch && myBranch.allow_usher_add_member]);
+    if (myLocal) setAllowUsherAdd(!!myLocal.allow_usher_add_member);
+  }, [myLocal && myLocal.id, myLocal && myLocal.allow_usher_add_member]);
 
   const toggleAllowUsherAdd = async () => {
-    if (!myBranch || allowUsherAdd === null) return;
+    if (!myLocal || allowUsherAdd === null) return;
     setTogglingAllow(true);
     try {
-      const res = await api(`/branches/${myBranch.id}/allow-usher-add`, {
+      const res = await api(`/locals/${myLocal.id}/allow-usher-add`, {
         method: 'PATCH',
         body: { enabled: !allowUsherAdd },
       });
-      setAllowUsherAdd(!!(res.branch && res.branch.allow_usher_add_member));
-      toast(res.branch && res.branch.allow_usher_add_member
+      setAllowUsherAdd(!!(res.local && res.local.allow_usher_add_member));
+      toast(res.local && res.local.allow_usher_add_member
         ? 'Ushers can now add members.'
         : 'Ushers can no longer add members.');
     } catch (err) {
@@ -210,7 +210,7 @@ export default function MembersPage() {
       residence: form.get('residence') || null,
       status: form.get('status') || undefined,
       notes: form.get('notes'),
-      branchId: !editing && canTransfer && form.get('branchId') ? Number(form.get('branchId')) : undefined,
+      localId: !editing && canTransfer && form.get('localId') ? Number(form.get('localId')) : undefined,
     };
     setSaving(true);
     setFormError('');
@@ -234,7 +234,7 @@ export default function MembersPage() {
   /** Builds the yellow duplicate warning shown inside the member form modal. */
   const DuplicateWarning = () => {
     if (!dupCheck.member) return null;
-    const where = dupCheck.member.branch_name ? ` in ${dupCheck.member.branch_name}` : '';
+    const where = dupCheck.member.local_name ? ` in ${dupCheck.member.local_name}` : '';
     return (
       <Alert variant='warning' title='Possible duplicate member'>
         <span>
@@ -266,11 +266,11 @@ export default function MembersPage() {
     e.preventDefault();
     if (!transferTarget) return;
     const form = new FormData(e.target);
-    const branchId = Number(form.get('branchId'));
-    if (!branchId) return;
+    const localId = Number(form.get('localId'));
+    if (!localId) return;
     setTransferring(true);
     try {
-      const res = await api(`/members/${transferTarget.id}/transfer`, { method: 'POST', body: { branchId } });
+      const res = await api(`/members/${transferTarget.id}/transfer`, { method: 'POST', body: { localId } });
       toast(`Moved to ${res.transferred_to || 'the new local'}.`);
       setTransferTarget(null);
       await listQ.reload();
@@ -314,13 +314,13 @@ export default function MembersPage() {
         ) : null}
       </div>
 
-      {isBranchAdmin && (
+      {isLocalAdmin && (
         <section className='card pad' aria-label='Usher permissions' style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div>
               <h2 className='card-title' style={{ marginBottom: 2 }}>Allow ushers to add members</h2>
               <p className='muted small' style={{ margin: 0 }}>
-                When on, your ushers see a "+" button on their screen to sign up new members for {myBranch ? myBranch.name : 'your local'}.
+                When on, your ushers see a "+" button on their screen to sign up new members for {myLocal ? myLocal.name : 'your local'}.
               </p>
             </div>
             <label className='checkbox' style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
@@ -459,10 +459,10 @@ export default function MembersPage() {
             </Field>
           </div>
           {!editing && canTransfer && (
-            <Field label='Local' id='m-branch' hint='Which congregation this member belongs to.'>
-              <Select id='m-branch' name='branchId' defaultValue={currentBranchId ? String(currentBranchId) : ''}>
+            <Field label='Local' id='m-local' hint='Which congregation this member belongs to.'>
+              <Select id='m-local' name='localId' defaultValue={currentLocalId ? String(currentLocalId) : ''}>
                 <option value=''>Choose a local…</option>
-                {branches.map((b) => (
+                {locals.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </Select>
@@ -493,15 +493,15 @@ export default function MembersPage() {
         width='420px'
       >
         <form onSubmit={doTransfer} noValidate>
-          {transferTarget && transferTarget.branch_name && (
-            <p className='muted small'>Current local: <strong>{transferTarget.branch_name}</strong></p>
+          {transferTarget && transferTarget.local_name && (
+            <p className='muted small'>Current local: <strong>{transferTarget.local_name}</strong></p>
           )}
           <p className='muted small'>Attendance history is kept. Future marking happens at the new local.</p>
-          <Field label='Move to local' id='m-transfer-branch' required>
-            <Select id='m-transfer-branch' name='branchId' required>
+          <Field label='Move to local' id='m-transfer-local' required>
+            <Select id='m-transfer-local' name='localId' required>
               <option value=''>Choose a local…</option>
-              {branches
-                .filter((b) => !transferTarget || b.id !== transferTarget.branch_id)
+              {locals
+                .filter((b) => !transferTarget || b.id !== transferTarget.local_id)
                 .map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}

@@ -1,19 +1,19 @@
-const express = require('express');
+﻿const express = require('express');
 const db = require('../config/db');
 const { asyncHandler } = require('../utils/errors');
 const { authenticate, requireAdmin, requireDistrictAdmin } = require('../middleware/auth');
 
 const { getServiceTotals } = require('../services/stats');
-// Report SQL, branch scoping and the workbook builder live in services/ so the
+// Report SQL, local scoping and the workbook builder live in services/ so the
 // JSON endpoints and the Excel export always describe the same numbers.
 const {
-  branchScope,
-  makeBranchWhere,
+  localScope,
+  makeLocalWhere,
   todayStr,
   SERVICE_COUNTS_JOIN,
   defaultRange,
   getReportSummary,
-  getBranchReport,
+  getLocalReport,
 } = require('../services/reports');
 const { buildReportWorkbook } = require('../services/reportExport');
 
@@ -28,22 +28,22 @@ function reportRange(req) {
 /** Everything the admin Overview page needs in one round-trip. */
 router.get('/dashboard', asyncHandler(async (req, res) => {
   const today = todayStr();
-  const scope = branchScope(req);
-  const branchWhere = makeBranchWhere(scope);
+  const scope = localScope(req);
+  const localWhere = makeLocalWhere(scope);
 
-  const latestB = branchWhere([today], 's');
+  const latestB = localWhere([today], 's');
   const { rows: latestRows } = await db.query(
-    `SELECT s.id, s.branch_id, s.service_date, s.service_name, s.start_time, s.total_headcount, l.name AS location_name
+    `SELECT s.id, s.local_id, s.service_date, s.service_name, s.start_time, s.total_headcount, l.name AS location_name
        FROM services s LEFT JOIN locations l ON l.id = s.location_id
       WHERE s.service_date <= $1${latestB.sql}
       ORDER BY s.service_date DESC, s.start_time DESC NULLS LAST LIMIT 1`,
     latestB.params
   );
   const latestService = latestRows[0]
-    ? { ...latestRows[0], totals: await getServiceTotals(db, latestRows[0].id, latestRows[0].branch_id) }
+    ? { ...latestRows[0], totals: await getServiceTotals(db, latestRows[0].id, latestRows[0].local_id) }
     : null;
 
-  const avgB = branchWhere([today], 's');
+  const avgB = localWhere([today], 's');
   const { rows: avgRows } = await db.query(
     `SELECT ROUND(AVG(cnt), 1) AS avg FROM (
        SELECT COUNT(*) FILTER (WHERE a.status = 'present') AS cnt
@@ -56,7 +56,7 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     avgB.params
   );
 
-  const membersB = branchWhere([], 'm');
+  const membersB = localWhere([], 'm');
   const { rows: memberCounts } = await db.query(
     `SELECT COUNT(*) FILTER (WHERE m.status = 'active')   AS active,
             COUNT(*) FILTER (WHERE m.status = 'inactive') AS inactive
@@ -65,7 +65,7 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     membersB.params
   );
 
-  const fuB = branchWhere([], 'm');
+  const fuB = localWhere([], 'm');
   const { rows: followUpCount } = await db.query(
     `SELECT COUNT(*) AS n
        FROM follow_ups f
@@ -74,7 +74,7 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     fuB.params
   );
 
-  const hpB = branchWhere([], 'm');
+  const hpB = localWhere([], 'm');
   const { rows: highPriority } = await db.query(
     `SELECT f.id, f.member_id, f.absent_weeks, f.reason, f.priority, f.assigned_to,
             m.full_name AS member_name,
@@ -91,7 +91,7 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     hpB.params
   );
 
-  const trendB = branchWhere([today], 's');
+  const trendB = localWhere([today], 's');
   const trendSql = `SELECT s.id, s.service_date, s.service_name,
             COALESCE(a.present, 0)::int AS present,
             COALESCE(a.absent, 0)::int  AS absent,
@@ -108,7 +108,7 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
   }
   trendRows.reverse(); // oldest -> newest for charting
 
-  const rsB = branchWhere([], 's');
+  const rsB = localWhere([], 's');
   const { rows: recentServices } = await db.query(
     `SELECT s.id, s.service_date, s.service_name, s.total_headcount, l.name AS location_name,
             COALESCE(a.present, 0)::int AS present,
@@ -121,7 +121,7 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     rsB.params
   );
 
-  const lrB = branchWhere([], 's');
+  const lrB = localWhere([], 's');
   const { rows: latestRecords } = await db.query(
     `SELECT a.id, a.status, a.recorded_at, a.updated_at,
             m.id AS member_id, m.full_name AS member_name,
@@ -153,22 +153,22 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
 /** Aggregated report data over a date range (shared with the Excel export). */
 router.get('/summary', asyncHandler(async (req, res) => {
   const { from, to } = reportRange(req);
-  res.json(await getReportSummary(db, { from, to, scope: branchScope(req) }));
+  res.json(await getReportSummary(db, { from, to, scope: localScope(req) }));
 }));
 
 /**
- * Branch-by-branch attendance comparison (district admin only).
- * Powers the "compare attendance across branches" view.
+ * Local-by-local attendance comparison (district admin only).
+ * Powers the "compare attendance across locals" view.
  */
-router.get('/branches', requireDistrictAdmin, asyncHandler(async (req, res) => {
+router.get('/locals', requireDistrictAdmin, asyncHandler(async (req, res) => {
   const { from, to } = reportRange(req);
-  res.json({ from, to, ...(await getBranchReport(db, { from, to })) });
+  res.json({ from, to, ...(await getLocalReport(db, { from, to })) });
 }));
 
 /**
  * Excel download of everything the Reports and Visitors screens show: a Summary
  * dashboard with native Excel charts plus one sheet per table in the range.
- * District admins also get the branch comparison sheet.
+ * District admins also get the local comparison sheet.
  */
 router.get('/export', asyncHandler(async (req, res) => {
   const { from, to } = reportRange(req);
@@ -176,8 +176,8 @@ router.get('/export', asyncHandler(async (req, res) => {
   const { buffer, filename, counts } = await buildReportWorkbook({
     from,
     to,
-    scope: branchScope(req),
-    includeBranches: req.user.role === 'district_admin',
+    scope: localScope(req),
+    includeLocals: req.user.role === 'district_admin',
   });
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -190,3 +190,5 @@ router.get('/export', asyncHandler(async (req, res) => {
 }));
 
 module.exports = router;
+
+

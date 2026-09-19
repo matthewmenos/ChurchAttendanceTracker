@@ -18,7 +18,7 @@ export default function UsherAccountPage() {
     navigate('/login');
   };
 
-  const roleLabel = user?.role === 'district_admin' ? 'District admin' : user?.role === 'branch_admin' ? 'Local admin' : 'Usher';
+  const roleLabel = user?.role === 'district_admin' ? 'District admin' : user?.role === 'local_admin' ? 'Local admin' : 'Usher';
 
   return (
     <div className='container'>
@@ -30,7 +30,7 @@ export default function UsherAccountPage() {
             <p className='muted' style={{ margin: '4px 0 8px' }}>{user ? user.email : ''}</p>
             <div className='follow-meta' style={{ flexWrap: 'wrap' }}>
               <Badge variant='info'>{roleLabel}</Badge>
-              {user && user.branch_name && <Badge variant='neutral'>{user.branch_name}</Badge>}
+              {user && user.local_name && <Badge variant='neutral'>{user.local_name}</Badge>}
             </div>
           </div>
         </div>

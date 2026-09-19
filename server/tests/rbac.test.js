@@ -1,4 +1,4 @@
-process.env.NODE_ENV = 'test';
+﻿process.env.NODE_ENV = 'test';
 
 const request = require('supertest');
 const { app, db, resetTables, createUser, loginAs, seedBase } = require('./helpers');
@@ -98,83 +98,84 @@ describe('Role-based access control', () => {
   });
 });
 
-describe('Branch admin scoping', () => {
-  async function seedBranchAdmin() {
+describe('Local admin scoping', () => {
+  async function seedLocalAdmin() {
     const base = await seedBase();
-    const { rows } = await db.query("INSERT INTO branches (name) VALUES ('Second Branch') RETURNING id");
+    const { rows } = await db.query("INSERT INTO locals (name) VALUES ('Second Local') RETURNING id");
     await createUser({
-      name: 'Branch Admin',
-      email: 'branch.admin@test.app',
-      role: 'branch_admin',
-      branchId: base.branchId,
+      name: 'Local admin',
+      email: 'local.admin@test.app',
+      role: 'local_admin',
+      localId: base.localId,
     });
-    return { base, otherBranchId: rows[0].id, branchAdmin: await loginAs('branch.admin@test.app') };
+    return { base, otherLocalId: rows[0].id, localAdmin: await loginAs('local.admin@test.app') };
   }
 
-  test('a branch admin reaches the admin-console endpoints', async () => {
-    const { branchAdmin } = await seedBranchAdmin();
+  test('a local admin reaches the admin-console endpoints', async () => {
+    const { localAdmin } = await seedLocalAdmin();
     for (const path of ['/api/members', '/api/users', '/api/settings', '/api/reports/dashboard']) {
-      expect((await branchAdmin.get(path)).status).toBe(200);
+      expect((await localAdmin.get(path)).status).toBe(200);
     }
   });
 
-  test('a branch admin creates an usher without naming a branch (defaults to their own)', async () => {
-    const { base, branchAdmin } = await seedBranchAdmin();
-    const res = await branchAdmin
+  test('a local admin creates an usher without naming a local (defaults to their own)', async () => {
+    const { base, localAdmin } = await seedLocalAdmin();
+    const res = await localAdmin
       .post('/api/users')
       .send({ name: 'New Usher', email: 'new.usher@test.app', role: 'usher' });
     expect(res.status).toBe(201);
-    expect(res.body.user.branch_id).toBe(base.branchId);
+    expect(res.body.user.local_id).toBe(base.localId);
   });
 
-  test('a branch admin cannot create users in another branch', async () => {
-    const { otherBranchId, branchAdmin } = await seedBranchAdmin();
-    const res = await branchAdmin
+  test('a local admin cannot create users in another local', async () => {
+    const { otherLocalId, localAdmin } = await seedLocalAdmin();
+    const res = await localAdmin
       .post('/api/users')
-      .send({ name: 'Foreign Usher', email: 'foreign@test.app', role: 'usher', branchId: otherBranchId });
+      .send({ name: 'Foreign Usher', email: 'foreign@test.app', role: 'usher', localId: otherLocalId });
     expect(res.status).toBe(403);
   });
 
-  test('a branch admin cannot mint another branch admin', async () => {
-    const { base, branchAdmin } = await seedBranchAdmin();
-    const res = await branchAdmin
+  test('a local admin cannot mint another local admin', async () => {
+    const { base, localAdmin } = await seedLocalAdmin();
+    const res = await localAdmin
       .post('/api/users')
-      .send({ name: 'Peer Admin', email: 'peer@test.app', role: 'branch_admin', branchId: base.branchId });
+      .send({ name: 'Peer Admin', email: 'peer@test.app', role: 'local_admin', localId: base.localId });
     expect(res.status).toBe(403);
   });
 
-  test('editing an usher keeps their branch when no branch is sent', async () => {
-    const { base, branchAdmin } = await seedBranchAdmin();
-    const res = await branchAdmin
+  test('editing an usher keeps their local when no local is sent', async () => {
+    const { base, localAdmin } = await seedLocalAdmin();
+    const res = await localAdmin
       .put(`/api/users/${base.usher.id}`)
       .send({ name: 'Usher One Renamed', email: 'usher@test.app' });
     expect(res.status).toBe(200);
     expect(res.body.user.name).toBe('Usher One Renamed');
-    expect(res.body.user.branch_id).toBe(base.branchId);
+    expect(res.body.user.local_id).toBe(base.localId);
   });
 
   test('only a district admin can change a user role', async () => {
-    const { base, branchAdmin } = await seedBranchAdmin();
-    const blocked = await branchAdmin
+    const { base, localAdmin } = await seedLocalAdmin();
+    const blocked = await localAdmin
       .put(`/api/users/${base.usher.id}`)
-      .send({ name: 'Usher One', email: 'usher@test.app', role: 'branch_admin', branchId: base.branchId });
+      .send({ name: 'Usher One', email: 'usher@test.app', role: 'local_admin', localId: base.localId });
     expect(blocked.status).toBe(403);
 
     const admin = await loginAs('admin@test.app');
     const promoted = await admin
       .put(`/api/users/${base.usher.id}`)
-      .send({ name: 'Usher One', email: 'usher@test.app', role: 'branch_admin', branchId: base.branchId });
+      .send({ name: 'Usher One', email: 'usher@test.app', role: 'local_admin', localId: base.localId });
     expect(promoted.status).toBe(200);
-    expect(promoted.body.user.role).toBe('branch_admin');
-    expect(promoted.body.user.branch_id).toBe(base.branchId);
+    expect(promoted.body.user.role).toBe('local_admin');
+    expect(promoted.body.user.local_id).toBe(base.localId);
   });
 
-  test('a branch admin cannot change church-wide settings', async () => {
-    const { branchAdmin } = await seedBranchAdmin();
-    const blocked = await branchAdmin.put('/api/settings').send({ church_name: 'Renamed Church' });
+  test('a local admin cannot change church-wide settings', async () => {
+    const { localAdmin } = await seedLocalAdmin();
+    const blocked = await localAdmin.put('/api/settings').send({ church_name: 'Renamed Church' });
     expect(blocked.status).toBe(403);
 
-    const allowed = await branchAdmin.put('/api/settings').send({ usher_can_correct_attendance: true });
+    const allowed = await localAdmin.put('/api/settings').send({ usher_can_correct_attendance: true });
     expect(allowed.status).toBe(200);
   });
 });
+

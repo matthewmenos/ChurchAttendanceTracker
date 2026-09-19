@@ -31,14 +31,14 @@ const USER = () => ({
   status: 'active',
   must_change_password: false,
   last_login_at: null,
-  branch_id: 1,
+  local_id: 1,
   password_hash: passwordHash,
 });
 
 const PUBLIC_USER = () => ({
   ...USER(),
-  branch_name: 'Central',
-  branch_allows_member_add: false,
+  local_name: 'Central',
+  local_allows_member_add: false,
   church_name: 'Grace Chapel',
   logo: '',
 });
@@ -143,7 +143,7 @@ describe('Session lifetime (a PWA session must not be ephemeral)', () => {
       { match: 'INSERT INTO refresh_tokens', rows: [] },
       { match: 'SELECT u.id, u.name, u.email', rows: [PUBLIC_USER()] },
       // The middleware's own lookup, run on the retry in step 3.
-      { match: 'must_change_password, last_login_at, branch_id', rows: [USER()] },
+      { match: 'must_change_password, last_login_at, local_id', rows: [USER()] },
     ]);
 
     // Step 1 — boot with only the refresh cookie: unauthenticated, as expected.

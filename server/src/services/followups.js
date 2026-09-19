@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Automatic follow-up creation.
  *
  * When a member's consecutive_absences reaches the configured threshold
  * (settings.followup_absent_threshold, 0 = disabled), they are added to the
  * follow-up list with an open, auto-created record. Only one open follow-up is
- * kept per member — closing it lets a fresh one be created if they lapse again.
+ * kept per member â€” closing it lets a fresh one be created if they lapse again.
  */
 const db = require('../config/db');
 const { getSettingsMap } = require('./settings');
@@ -57,25 +57,26 @@ async function syncFollowUpForMember(instance, memberId, opts = {}) {
 
 /**
  * Scan active members and create follow-ups for those past the threshold.
- * Pass opts.branchId to limit the scan to a single branch (branch admins).
+ * Pass opts.localId to limit the scan to a single local (local admins).
  */
 async function syncFollowUps(instance, opts = {}) {
   const threshold = opts.threshold !== undefined ? opts.threshold : await readThreshold(instance);
   if (!threshold) return { threshold: 0, disabled: true, created: [] };
 
-  const branchId = opts.branchId ? Number(opts.branchId) : null;
+  const localId = opts.localId ? Number(opts.localId) : null;
   const { rows } = await instance.query(
     `SELECT id FROM members
       WHERE status = 'active' AND consecutive_absences >= $1
-        AND ($2::int IS NULL OR branch_id = $2)`,
-    [threshold, branchId]
+        AND ($2::int IS NULL OR local_id = $2)`,
+    [threshold, localId]
   );
   const created = [];
   for (const m of rows) {
-    const r = await syncFollowUpForMember(instance, m.id, { threshold, createdBy: opts.createdBy, branchId });
+    const r = await syncFollowUpForMember(instance, m.id, { threshold, createdBy: opts.createdBy, localId });
     if (r.created) created.push(r);
   }
   return { threshold, disabled: false, created };
 }
 
 module.exports = { readThreshold, syncFollowUpForMember, syncFollowUps };
+

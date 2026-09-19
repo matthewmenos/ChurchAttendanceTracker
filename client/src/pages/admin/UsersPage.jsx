@@ -13,19 +13,19 @@ import { IconFileText } from '../../components/ui/icons.jsx';
 
 const ROLE_LABEL = {
   district_admin: 'District admin',
-  branch_admin: 'Local admin',
+  local_admin: 'Local admin',
   usher: 'Usher',
 };
 
 const ROLE_BADGE = {
   district_admin: 'info',
-  branch_admin: 'warning',
+  local_admin: 'warning',
   usher: 'neutral',
 };
 
 export default function UsersPage() {
   const toast = useToast();
-  const { user: me, branches } = useAuth();
+  const { user: me, locals } = useAuth();
   const isDistrict = !!me && me.role === 'district_admin';
   const listQ = useFetch(() => api('/users'), []);
   const items = (listQ.data && listQ.data.items) || [];
@@ -34,8 +34,8 @@ export default function UsersPage() {
   const [editing, setEditing] = useState(null);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
-  // A district admin may re-scope any account but their own; a branch admin may
-  // only manage ushers inside their own branch.
+  // A district admin may re-scope any account but their own; a local admin may
+  // only manage ushers inside their own local.
   const canEditRole = isDistrict && !!editing && me.id !== editing.id;
 
   const [tempPassword, setTempPassword] = useState(null); // { name, password }
@@ -68,20 +68,20 @@ export default function UsersPage() {
     e.preventDefault();
     const form = new FormData(e.target);
     const roleValue = form.get('role');
-    const branchValue = form.get('branchId');
+    const localValue = form.get('localId');
     const payload = {
       name: form.get('name'),
       email: form.get('email'),
       username: form.get('username'),
       phone: form.get('phone'),
-      // Re-scoping an existing account is a district-admin action; a branch admin
-      // only ever edits ushers inside their own branch, so those keys are omitted.
+      // Re-scoping an existing account is a district-admin action; a local admin
+      // only ever edits ushers inside their own local, so those keys are omitted.
       role: editing ? (canEditRole ? roleValue : undefined) : roleValue,
-      branchId: editing
-        ? (canEditRole ? (branchValue ? Number(branchValue) : null) : undefined)
+      localId: editing
+        ? (canEditRole ? (localValue ? Number(localValue) : null) : undefined)
         : (isDistrict
-          ? (branchValue ? Number(branchValue) : undefined)
-          : (me.branch_id || undefined)
+          ? (localValue ? Number(localValue) : undefined)
+          : (me.local_id || undefined)
         ),
     };
     setSaving(true);
@@ -178,9 +178,9 @@ export default function UsersPage() {
                 ),
               },
               {
-                key: 'branch_name',
+                key: 'local_name',
                 label: 'Local',
-                render: (u) => (u.branch_name ? u.branch_name : <span className='muted'>—</span>),
+                render: (u) => (u.local_name ? u.local_name : <span className='muted'>—</span>),
               },
               { key: 'status', label: 'Status', render: (u) => <Badge variant={u.status}>{u.status === 'active' ? 'Active' : 'Inactive'}</Badge> },
               { key: 'must_change_password', label: 'Credentials', render: (u) => (u.must_change_password ? <Badge variant='warning'>Temp password</Badge> : <Badge variant='ok'>Set</Badge>) },
@@ -231,22 +231,22 @@ export default function UsersPage() {
               <Field label='Role' id='u-role' required>
                 <Select id='u-role' name='role' defaultValue='usher'>
                   {isDistrict && <option value='district_admin'>District admin — full access</option>}
-                  {isDistrict && <option value='branch_admin'>Local admin — manages one local</option>}
+                  {isDistrict && <option value='local_admin'>Local admin — manages one local</option>}
                   <option value='usher'>Usher — records attendance only</option>
                 </Select>
               </Field>
               {isDistrict ? (
-                <Field label='Local' id='u-branch' hint='Required for ushers and local admins; district admins are not local-bound.'>
-                  <Select id='u-branch' name='branchId' defaultValue=''>
+                <Field label='Local' id='u-local' hint='Required for ushers and local admins; district admins are not local-bound.'>
+                  <Select id='u-local' name='localId' defaultValue=''>
                     <option value=''>No local (district admin only)</option>
-                    {branches.map((b) => (
+                    {locals.map((b) => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </Select>
                 </Field>
               ) : (
-                <Field label='Local' id='u-branch' hint='New accounts are added to your own local.'>
-                  <Input id='u-branch' value={me.branch_name || 'Your local'} readOnly disabled />
+                <Field label='Local' id='u-local' hint='New accounts are added to your own local.'>
+                  <Input id='u-local' value={me.local_name || 'Your local'} readOnly disabled />
                 </Field>
               )}
             </>
@@ -256,14 +256,14 @@ export default function UsersPage() {
               <Field label='Role' id='u-role' required hint='Changing the role re-scopes everything this account can reach.'>
                 <Select id='u-role' name='role' defaultValue={editing.role}>
                   <option value='district_admin'>District admin — full access</option>
-                  <option value='branch_admin'>Local admin — manages one local</option>
+                  <option value='local_admin'>Local admin — manages one local</option>
                   <option value='usher'>Usher — records attendance only</option>
                 </Select>
               </Field>
-              <Field label='Local' id='u-branch' hint='Required unless the role is district admin.'>
-                <Select id='u-branch' name='branchId' defaultValue={editing.branch_id || ''}>
+              <Field label='Local' id='u-local' hint='Required unless the role is district admin.'>
+                <Select id='u-local' name='localId' defaultValue={editing.local_id || ''}>
                   <option value=''>No local (district admin only)</option>
-                  {branches.map((b) => (
+                  {locals.map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </Select>

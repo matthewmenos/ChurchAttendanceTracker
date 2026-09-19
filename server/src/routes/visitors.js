@@ -1,8 +1,8 @@
-const express = require('express');
+﻿const express = require('express');
 const db = require('../config/db');
 const { ApiError, asyncHandler } = require('../utils/errors');
 const { vStr, vInt, vEmail, vEnum, vDate } = require('../utils/validate');
-const { authenticate, requireAdmin, isAdminRole, assertBranchAccess } = require('../middleware/auth');
+const { authenticate, requireAdmin, isAdminRole, assertLocalAccess } = require('../middleware/auth');
 const { createVisitor, listVisitors, updateVisitor, convertToMember, visitorStats } = require('../services/visitors');
 
 const router = express.Router();
@@ -11,10 +11,10 @@ const router = express.Router();
 router.post('/', authenticate, asyncHandler(async (req, res) => {
   const serviceId = vInt(req.body, 'serviceId', { label: 'Service' });
   if (serviceId) {
-    const svc = await db.query('SELECT id, branch_id FROM services WHERE id = $1', [serviceId]);
+    const svc = await db.query('SELECT id, local_id FROM services WHERE id = $1', [serviceId]);
     if (!svc.rows.length) throw new ApiError(400, 'Service not found.');
-    // Visitors belong to the branch whose service they attended.
-    assertBranchAccess(req.user, svc.rows[0].branch_id);
+    // Visitors belong to the local whose service they attended.
+    assertLocalAccess(req.user, svc.rows[0].local_id);
   }
   const fullName = vStr(req.body, 'fullName', { required: true, max: 120, label: 'Visitor name' });
   const gender = vEnum(req.body, 'gender', ['male', 'female']);
@@ -34,8 +34,8 @@ router.post('/', authenticate, asyncHandler(async (req, res) => {
 }));
 
 // Ushers must scope the list to the service they are marking (serviceId) or to
-// the visitors they personally captured (mine=1). Admins -- district and branch
-// -- browse the whole register (branch-scoped where applicable), which is what
+// the visitors they personally captured (mine=1). Admins -- district and local
+// -- browse the whole register (local-scoped where applicable), which is what
 // the admin Visitors screen does.
 router.get('/', authenticate, asyncHandler(async (req, res) => {
   const isDistrictAdmin = req.user.role === 'district_admin';
@@ -47,11 +47,11 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   const result = await listVisitors({
     serviceId: serviceId || undefined,
     createdBy: mine ? req.user.id : undefined,
-    // District admins see the whole church and may narrow with ?branchId=.
-    // Branch admins & ushers only ever see visitors of their own branch.
-    branchId: isDistrictAdmin
-      ? (vInt(req.query, 'branchId') || undefined)
-      : (req.user.branch_id || -1),
+    // District admins see the whole church and may narrow with ?localId=.
+    // Local admins & ushers only ever see visitors of their own local.
+    localId: isDistrictAdmin
+      ? (vInt(req.query, 'localId') || undefined)
+      : (req.user.local_id || -1),
     followupStatus: vEnum(req.query, 'followupStatus', ['new', 'contacted', 'visited', 'joined', 'lost']),
     search: vStr(req.query, 'search', { max: 100 }) || undefined,
     page: vInt(req.query, 'page') || 1,
@@ -67,14 +67,14 @@ router.get('/stats', asyncHandler(async (req, res) => {
   res.json({ items: await visitorStats({
     from: vDate(req.query, 'from'),
     to: vDate(req.query, 'to'),
-    // Branch admins only see their own branch's visitor totals.
-    branchId: req.user.role === 'district_admin' ? undefined : (req.user.branch_id || -1),
+    // Local admins only see their own local's visitor totals.
+    localId: req.user.role === 'district_admin' ? undefined : (req.user.local_id || -1),
   }) });
 }));
 
 /**
- * Loads a visitor and enforces branch access. A visitor belongs to the branch of
- * the service they attended, falling back to the branch of the user who captured
+ * Loads a visitor and enforces local access. A visitor belongs to the local of
+ * the service they attended, falling back to the local of the user who captured
  * them -- the same rule convertToMember() uses. District admins see everything.
  */
 async function loadVisitorForUser(req, id) {
@@ -83,14 +83,14 @@ async function loadVisitorForUser(req, id) {
   if (!visitor) throw new ApiError(404, 'Visitor not found.');
   if (req.user.role !== 'district_admin') {
     const { rows } = await db.query(
-      `SELECT COALESCE(s.branch_id, u.branch_id) AS branch_id
+      `SELECT COALESCE(s.local_id, u.local_id) AS local_id
          FROM visitors v
          LEFT JOIN services s ON s.id = v.service_id
          LEFT JOIN users u ON u.id = v.created_by
         WHERE v.id = $1`,
       [visitor.id]
     );
-    assertBranchAccess(req.user, rows[0] && rows[0].branch_id);
+    assertLocalAccess(req.user, rows[0] && rows[0].local_id);
   }
   return visitor;
 }
@@ -123,3 +123,4 @@ router.post('/:id/convert', asyncHandler(async (req, res) => {
 }));
 
 module.exports = router;
+
