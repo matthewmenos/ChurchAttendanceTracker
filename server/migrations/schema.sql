@@ -1,4 +1,4 @@
-﻿-- =====================================================================
+-- =====================================================================
 --  Church Attendance Tracker : COMPLETE CONSOLIDATED SCHEMA
 --  Combines migrations 001-013 into one idempotent, deployable schema.
 --  Safe to run repeatedly against the same database.

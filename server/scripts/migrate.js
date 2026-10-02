@@ -23,13 +23,23 @@ async function runMigrations(connectionString) {
         'CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())'
       );
       const dir = path.join(__dirname, '..', 'migrations');
-      const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
+      let files = [];
+      try {
+        files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
+      } catch (e) {
+        // On serverless hosts the migrations folder is not always traced into the
+        // bundle. Migrations are normally already applied by then, so treat a
+        // missing folder as "nothing to do" instead of wedging the whole API.
+        console.warn(`Migrations folder unavailable at ${dir}: ${e.message}`);
+      }
       const { rows } = await client.query('SELECT name FROM _migrations');
       const applied = new Set(rows.map((r) => r.name));
       let ran = 0;
       for (const file of files) {
         if (applied.has(file)) continue;
-        const sql = fs.readFileSync(path.join(dir, file), 'utf8');
+        // Strip a UTF-8 BOM: Postgres rejects a leading EF BB BF as a syntax
+        // error, which would fail the migration on every cold start.
+        const sql = fs.readFileSync(path.join(dir, file), 'utf8').replace(/^\uFEFF/, '');
         try {
           await client.query('BEGIN');
           await client.query(sql);
