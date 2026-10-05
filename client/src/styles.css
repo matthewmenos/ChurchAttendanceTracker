@@ -893,6 +893,10 @@ ul.stack .follow-item { border: 1px solid var(--line); border-radius: 10px; padd
 .pull-to-refresh-container {
   position: relative;
   min-height: 100%;
+  /* NOTE: deliberately no `touch-action` here. This container wraps every page,
+     including `.table-wrap` horizontal scrollers, so forcing a pan axis would
+     block horizontal touch scrolling of tables on tablets. The gesture in
+     PullToRefresh.jsx cancels only its own downward pull instead. */
 }
 
 .ptr-indicator {

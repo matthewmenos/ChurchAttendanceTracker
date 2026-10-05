@@ -26,8 +26,12 @@ export default function PullToRefresh({ children }) {
 
   const isAtTop = () => {
     const el = containerRef.current;
-    if (!el) return window.scrollY === 0;
-    return el.scrollTop === 0 && window.scrollY === 0;
+    // iOS reports a NEGATIVE scrollY while the page rubber-bands at the very
+    // top, so this must be "<= 0" rather than "=== 0" - otherwise the gesture
+    // can never arm on the device this app is mostly used on.
+    const winY = window.scrollY || 0;
+    if (!el) return winY <= 0;
+    return el.scrollTop <= 0 && winY <= 0;
   };
 
   const startGesture = (clientY) => {
@@ -40,24 +44,32 @@ export default function PullToRefresh({ children }) {
     return true;
   };
 
+  /** How far the finger has travelled DOWNWARDS since the gesture began. */
+  const pullDistance = (clientY) => clientY - startPos.current;
+
   const moveGesture = (clientY) => {
     if (!isActive.current) return;
-    const delta = clientY - startPos.current;
+    const delta = pullDistance(clientY);
     if (delta > 0) {
       dragDistance.current = delta;
       setIndicatorPct(Math.min(delta / REFRESH_THRESHOLD, 1));
     }
   };
 
-  const endGesture = () => {
-    if (!isActive.current) return;
+  /** Abandons the gesture without refreshing (the user scrolled away instead). */
+  const cancelGesture = () => {
     isActive.current = false;
+    dragDistance.current = 0;
     setShowIndicator(false);
     setIndicatorPct(0);
+  };
+
+  const endGesture = () => {
+    if (!isActive.current) return;
 
     // If we pulled past the threshold, trigger the refresh.
     const shouldRefresh = dragDistance.current >= REFRESH_THRESHOLD;
-    dragDistance.current = 0;
+    cancelGesture();
 
     if (shouldRefresh) {
       triggerRefresh();
@@ -68,8 +80,20 @@ export default function PullToRefresh({ children }) {
   const onTouchStart = (e) => startGesture(e.touches[0].clientY);
   const onTouchMove = (e) => {
     if (!isActive.current) return;
-    e.preventDefault(); // prevent body scroll bounce while pulling
-    moveGesture(e.touches[0].clientY);
+    // Only take over the gesture for a genuine downward pull while the page is
+    // already at the very top. Calling preventDefault() unconditionally - which
+    // is what this used to do - cancelled the browser's own scrolling for EVERY
+    // touch drag that began at the top of the page, making the app impossible
+    // to scroll on a phone. Scrolling up (a negative delta) must fall through
+    // untouched so the page moves normally.
+    if (pullDistance(e.touches[0].clientY) > 0) {
+      e.preventDefault(); // stop the rubber-band bounce while pulling
+      moveGesture(e.touches[0].clientY);
+    } else {
+      // The user has reversed into a normal scroll: hand the gesture back to
+      // the browser for the remainder of this touch sequence.
+      cancelGesture();
+    }
   };
   const onTouchEnd = () => endGesture();
 
@@ -79,8 +103,14 @@ export default function PullToRefresh({ children }) {
   };
   const onPointerMove = (e) => {
     if (!isActive.current || e.pointerType === 'touch') return;
-    e.preventDefault();
-    moveGesture(e.clientY);
+    // Mirror the touch path: only capture an actual downward pull, so dragging
+    // the mouse upward (or selecting text) never gets swallowed.
+    if (pullDistance(e.clientY) > 0) {
+      e.preventDefault();
+      moveGesture(e.clientY);
+    } else {
+      cancelGesture();
+    }
   };
   const onPointerUp = (e) => {
     if (e.pointerType !== 'touch') endGesture();
@@ -93,6 +123,7 @@ export default function PullToRefresh({ children }) {
     el.addEventListener('touchstart', onTouchStart, { passive: false });
     el.addEventListener('touchmove', onTouchMove, { passive: false });
     el.addEventListener('touchend', onTouchEnd);
+    el.addEventListener('touchcancel', onTouchEnd);
     el.addEventListener('pointerdown', onPointerDown);
     el.addEventListener('pointermove', onPointerMove, { passive: false });
     el.addEventListener('pointerup', onPointerUp);
@@ -101,6 +132,7 @@ export default function PullToRefresh({ children }) {
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
       el.removeEventListener('pointerdown', onPointerDown);
       el.removeEventListener('pointermove', onPointerMove);
       el.removeEventListener('pointerup', onPointerUp);
