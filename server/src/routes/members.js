@@ -95,13 +95,13 @@ async function findDuplicateMember({ fullName, birthday, phone, excludeId }) {
   if (!nameKey && !birthdayKey && !phoneKey) return null;
   const { rows } = await db.query(
     `SELECT m.id, m.full_name, m.phone, m.birthday, m.status, b.name AS local_name,
-            (COALESCE(($1 IS NOT NULL AND lower(regexp_replace(m.full_name, '\\s+', ' ', 'g')) = $1)::int, 0)
+            (COALESCE(($1::text IS NOT NULL AND lower(regexp_replace(m.full_name, '\\s+', ' ', 'g')) = $1::text)::int, 0)
            + COALESCE(($2::date IS NOT NULL AND m.birthday = $2::date)::int, 0)
-           + COALESCE(($3 IS NOT NULL AND length(regexp_replace(m.phone, '[^0-9]', '', 'g')) >= 7
-                        AND right(regexp_replace(m.phone, '[^0-9]', '', 'g'), 9) = $3)::int, 0)) AS matches
+           + COALESCE(($3::text IS NOT NULL AND length(regexp_replace(m.phone, '[^0-9]', '', 'g')) >= 7
+                        AND right(regexp_replace(m.phone, '[^0-9]', '', 'g'), 9) = $3::text)::int, 0)) AS matches
        FROM members m
        LEFT JOIN locals b ON b.id = m.local_id
-      WHERE m.id <> COALESCE($4, -1)
+      WHERE m.id <> COALESCE($4::integer, -1)
       ORDER BY matches DESC
       LIMIT 1`,
     [nameKey, birthdayKey, phoneKey, excludeId || null]
